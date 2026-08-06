@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HIMA 回放播放器</title>
+<title>HIMA Replay Player</title>
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --border: #30363d;
@@ -14,7 +14,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: var(--bg); color: var(--text);
-    font: 16px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font: 16px/1.5 -apple-system, "Segoe UI", sans-serif;
     display: flex; flex-direction: column; height: 100vh; overflow: hidden;
   }
   header {
@@ -74,19 +74,19 @@
   <h1 id="title"></h1>
   <span id="result" class="badge"></span>
   <span id="mapname" class="muted"></span>
-  <span class="muted">敌方单位仅在我方视野内可见（战争迷雾）</span>
+  <span class="muted">Enemy units are visible only inside friendly vision (fog of war)</span>
 </header>
 <main>
   <div id="stage"><canvas id="map"></canvas></div>
   <aside>
-    <h2>LLM 决策（点击跳转）</h2>
+    <h2>LLM Decisions (click to jump)</h2>
     <div id="decisions"></div>
-    <h2>已执行命令</h2>
+    <h2>Executed Commands</h2>
     <div id="commands"></div>
   </aside>
 </main>
 <footer>
-  <button id="play">▶ 播放</button>
+  <button id="play">▶ Play</button>
   <select id="speed">
     <option value="1">1×</option>
     <option value="2">2×</option>
@@ -126,7 +126,7 @@ document.getElementById("title").textContent = HIMA.meta.replay;
 document.getElementById("mapname").textContent = `${HIMA.meta.map} · ${fmt(DURATION)}`;
 const resultEl = document.getElementById("result");
 function setResult(label) {
-  resultEl.textContent = label === "live" ? "直播中" : label;
+  resultEl.textContent = label === "live" ? "LIVE" : label;
   resultEl.className = "badge " + label;
 }
 setResult(HIMA.live ? "live" : HIMA.meta.result);
@@ -149,7 +149,7 @@ function addDecisionEntry(d, i) {
   const div = document.createElement("div");
   div.className = "decision";
   div.id = "dec-" + i;
-  div.innerHTML = `<span class="head">${fmt(d.t)} · ${d.n} 个动作</span><br>${escapeHtml(d.s)}`;
+  div.innerHTML = `<span class="head">${fmt(d.t)} · ${d.n} actions</span><br>${escapeHtml(d.s)}`;
   div.onclick = () => { simT = d.t; syncAll(true); };
   decisionsEl.appendChild(div);
 }
@@ -205,7 +205,7 @@ function updatePanels(frame) {
   let own = 0, enemy = 0;
   for (const u of frame.u) (u[3] === 1 ? own++ : enemy++);
   document.getElementById("readout").textContent =
-    `矿 ${frame.m} · 气 ${frame.g} · 补给 ${frame.su}/${frame.sc} · 我方 ${own} · 敌方可见 ${enemy}`;
+    `Minerals ${frame.m} · Gas ${frame.g} · Supply ${frame.su}/${frame.sc} · Own ${own} · Enemy visible ${enemy}`;
   let active = -1;
   HIMA.decisions.forEach((d, i) => { if (d.t <= simT) active = i; });
   document.querySelectorAll(".decision").forEach((el, i) => el.classList.toggle("active", i === active));
@@ -249,7 +249,7 @@ const playBtn = document.getElementById("play");
 const speedEl = document.getElementById("speed");
 function setPlaying(value) {
   playing = value;
-  playBtn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+  playBtn.textContent = playing ? "⏸ Pause" : "▶ Play";
 }
 playBtn.onclick = () => {
   if (!playing && simT >= DURATION) simT = 0;
