@@ -1,6 +1,6 @@
 # Design — Deployment Artifacts (`docker/`)
 
-Concepts and placement rationale: `concept.md`. This document specifies the images,
+Concepts and placement rationale: `concept-deployment.md`. This document specifies the images,
 services, and their interfaces. No classes; components only.
 
 ## Design Overview
@@ -33,7 +33,7 @@ services, and their interfaces. No classes; components only.
 - **Build argument**: the license-acceptance string unpacking Blizzard's archive;
   no default value — the build fails until the user supplies it.
 - **Constraint**: `linux/amd64` only; on Apple silicon it runs emulated and slow.
-  Results are not comparable with retail 5.0.16 runs (`concept.md`).
+  Results are not comparable with retail 5.0.16 runs (`concept-deployment.md`).
 
 ### leader baked (`docker/leader.Dockerfile`)
 - **Responsibility**: ollama image with qwen3:8b pulled at build time; version pinned

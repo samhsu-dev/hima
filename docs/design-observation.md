@@ -1,6 +1,6 @@
 # Design — Game Observation (`cli/web/`)
 
-Concepts and terminology: `concept.md`. Phases Model and Spec are skipped: pure
+Concepts and terminology: `concept-observation.md`. Phases Model and Spec are skipped: pure
 infrastructure over an already-confirmed record vocabulary, no non-trivial algorithm
 (folding is sequential accumulation).
 
@@ -31,13 +31,13 @@ One JSON object per line in `frames.jsonl`, discriminated by `k`:
 |-----|--------|---------|
 | `meta` | `map`, `playable` | Emitted once at first sample |
 | `type` | `name`, `r`, `s` | Type registry entry; index = order of appearance |
-| `frame` | `t`, `m`, `g`, `su`, `sc`, `u` | One frame record (fields as in `cli/design.md`) |
+| `frame` | `t`, `m`, `g`, `su`, `sc`, `u` | One frame record (fields as in `design-cli.md`) |
 | `end` | `result` | Emitted when the game ends |
 
 Decision records `{t, n, s}` and command records `{t, a, st}` are not in
 `frames.jsonl`; they fold from the run's `output.txt` and `command.txt` via `logs`.
 The game payload is the fold: `{meta, types, type_meta, neutral, frames, decisions,
-commands}` — identical to the exported-page payload in `cli/design.md`.
+commands}` — identical to the exported-page payload in `design-cli.md`.
 
 ## Class / Type Specifications
 

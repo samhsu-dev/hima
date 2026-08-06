@@ -10,7 +10,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 - **Classes**: `ServiceSpec`, `ReplayExporter`, `CommandError`
 - **Modules**: `main` (dispatch), `workspace` (paths), `services`, `patches`,
   `experiment`, `metrics`, `replay`, `export`, `viewer`; subpackage `web/`
-  (game observation — own `concept.md` and `design.md`)
+  (game observation — `concept-observation.md`, `design-observation.md`)
 - **Relationships**: `main` dispatches to every command module (one-way).
   `viewer` uses `export` (frame data) and `web.logs` (decision and command parsing).
   `export` uses `web.records` (record file written during re-simulation).
@@ -25,7 +25,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 - **Assets**: `player_template.html` — self-contained canvas player; `viewer` injects
   exported JSON into its placeholder to produce one standalone HTML file per replay.
   The observation server injects the same payload into the same template
-  (`web/design.md`).
+  (`design-observation.md`).
 
 ## Class / Type Specifications
 
@@ -94,14 +94,14 @@ Each command module exposes one public entry consumed by `main`.
   the replay with `ReplayExporter` (direct `_setup_replay`/`_play_replay` hosting:
   burnysc2 7.3.0 `run_replay` drops `observed_id`, causing `Race.NoRace`), parse
   leader decisions (`output.txt`) and executed commands (`command.txt`) from
-  `logs_dir`, write the record file `frames.jsonl` beside the logs (`web/design.md`),
+  `logs_dir`, write the record file `frames.jsonl` beside the logs (`design-observation.md`),
   inject all data into `player_template.html`, write one standalone
   HTML next to the replay (or `out`). Output: written path.
   Errors: `CommandError` when the replay is missing; engine failures propagate.
 - **view(path) -> None** (`viewer`) — Behavior: `export` when given a replay (reuse
   an existing export when present), then open the HTML in the default browser.
 - **serve(host, port) -> None** (`web.server`) — the observation server; full
-  specification in `web/design.md`.
+  specification in `design-observation.md`.
 
 ## Exception / Error Types
 

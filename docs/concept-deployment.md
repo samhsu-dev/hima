@@ -21,8 +21,8 @@ built from the locked environment, and names the host-native placements for the 
 **Scope Boundaries**
 - **Owned:** container images, service topology, ports and volumes, cross-device
   reproducibility of the environment.
-- **Not Owned:** experiment semantics (`cli/design.md`), the observation record schema
-  (`cli/web/concept.md`), model fine-tuning, license acceptance (the user accepts the
+- **Not Owned:** experiment semantics (`design-cli.md`), the observation record schema
+  (`concept-observation.md`), model fine-tuning, license acceptance (the user accepts the
   StarCraft II license themselves).
 
 ## 2. Concepts

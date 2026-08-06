@@ -1,1 +1,1 @@
-"""Operations CLI for the HIMA project; see cli/design.md."""
+"""Operations CLI for the HIMA project; see docs/design-cli.md."""

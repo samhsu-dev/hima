@@ -22,7 +22,7 @@ into browser pages, for the game currently playing and for archived games alike.
 - **Owned:** the record schema (frame, decision, command), folding records into a game
   payload, live incremental delivery, archived-game delivery, game listing.
 - **Not Owned:** game execution and archiving (experiment run), engine re-simulation
-  of old replays (export, see `cli/design.md`), model services, StarCraft II's own
+  of old replays (export, see `design-cli.md`), model services, StarCraft II's own
   rendering.
 
 ## 2. Concepts
@@ -87,7 +87,7 @@ bot (game playing)              run archive (game finished)
   - **Scope:** One renderer for both modes. Live mode appends stream records and
     follows the newest frame; replay mode scrubs a complete payload.
   - **Relationships:** Consumes the game payload; live mode also consumes the live
-    stream; the standalone exported page (`cli/design.md`) embeds the same payload.
+    stream; the standalone exported page (`design-cli.md`) embeds the same payload.
 
 **The unified-interface requirement reduces to: live = payload-so-far + live stream;
 replay = complete payload. One schema, one renderer.**
