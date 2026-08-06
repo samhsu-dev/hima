@@ -146,7 +146,7 @@ def _wait_healthy(spec: ServiceSpec) -> None:
 
 
 def _ensure_leader_model(model: str, skip_pull: bool) -> None:
-    if leader_model_present(model):
+    if leader_model_present(OLLAMA_URL, model):
         return
     if skip_pull:
         raise CommandError(f"leader model {model} absent; run `ollama pull {model}`")
