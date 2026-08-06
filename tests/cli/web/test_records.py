@@ -9,6 +9,8 @@ Test cases:
   FileNotFoundError.
 - test_fold_records_unknown_kind_raises_value_error: unknown `k` raises
   ValueError.
+- test_fold_lines_matches_fold_records: folding in-memory lines yields the
+  same payload as folding the file they were written to.
 - test_sampler_roundtrip_matches_folded_payload: records written by GameSampler
   fold back into the payload matching the stub game state.
 - test_sampler_skips_iterations_between_intervals: off-interval iteration
@@ -21,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.web.records import GameSampler, fold_records
+from cli.web.records import GameSampler, fold_lines, fold_records
 
 
 @dataclass
@@ -106,6 +108,12 @@ def test_fold_records_synthetic_file_builds_payload(tmp_path: Path) -> None:
         "frames": [{"t": 1.0, "m": 50, "g": 0, "su": 12, "sc": 15, "u": [[0, 30.0, 40.0, 1, 1.0]]}],
         "result": "Victory",
     }
+
+
+def test_fold_lines_matches_fold_records(tmp_path: Path) -> None:
+    path = write_records(tmp_path / "frames.jsonl", COMPLETE_LINES)
+
+    assert fold_lines(COMPLETE_LINES) == fold_records(path)
 
 
 def test_fold_records_without_end_record_keeps_none_result(tmp_path: Path) -> None:

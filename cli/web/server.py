@@ -6,12 +6,13 @@ import html
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from uvicorn.config import STARTUP_FAILURE
 
 from cli.errors import CommandError
 from cli.viewer import render
 from cli.web.games import GameStore
+from cli.web.stream import StreamCursor, live_events
 from cli.workspace import RUNS_DIR, TMP_DIR
 
 DEFAULT_HOST = "127.0.0.1"
@@ -21,6 +22,7 @@ HTTP_CONFLICT = 409
 MISSING_RECORD_DETAIL = (
     "game has no record file; run `hima export <replay>` to build a standalone viewer")
 LIVE_RESULT_LABEL = "in progress"
+EVENT_STREAM_MEDIA_TYPE = "text/event-stream"
 INDEX_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>hima games</title></head>
@@ -39,6 +41,7 @@ def create_app(store: GameStore) -> FastAPI:
     app = FastAPI(title="hima observation")
     _register_pages(app, store)
     _register_api(app, store)
+    _register_stream(app, store)
     return app
 
 
@@ -71,6 +74,14 @@ def _register_api(app: FastAPI, store: GameStore) -> None:
     @app.get("/api/games/{game_id}")
     def game_payload(game_id: str) -> dict:
         return _payload(store, game_id)
+
+
+def _register_stream(app: FastAPI, store: GameStore) -> None:
+    @app.get("/api/live/stream")
+    def live_stream(records: int = 0, decisions: int = 0, commands: int = 0) -> StreamingResponse:
+        cursor = StreamCursor(records=records, decisions=decisions, commands=commands)
+        return StreamingResponse(live_events(store.tmp_dir, cursor),
+                                 media_type=EVENT_STREAM_MEDIA_TYPE)
 
 
 def _payload(store: GameStore, game_id: str) -> dict:

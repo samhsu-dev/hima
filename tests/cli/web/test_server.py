@@ -13,6 +13,12 @@ Test cases:
   maps FileNotFoundError to HTTP 409 with a detail naming `hima export`.
 - test_serve_bound_port_raises_command_error: serving on a bound port raises
   CommandError instead of exiting the process.
+- test_live_stream_replays_finished_game: /api/live/stream on a finished tmp
+  record file returns every record as SSE events and closes.
+- test_live_stream_resumes_from_query_offsets: records/decisions/commands
+  query parameters skip the events the client already holds.
+- test_live_page_injects_stream_offset: /games/live injects a payload with
+  live true and the stream offset for the EventSource query.
 """
 import json
 import socket
@@ -111,6 +117,49 @@ def test_missing_record_returns_409_naming_export(tmp_path: Path) -> None:
 
     assert response.status_code == 409
     assert "hima export" in response.json()["detail"]
+
+
+def write_live_game(tmp_path: Path, *record_lines: str) -> None:
+    (tmp_path / "tmp" / "frames.jsonl").write_text(
+        "".join(line + "\n" for line in record_lines), encoding="utf-8")
+    (tmp_path / "tmp" / "output.txt").write_text(
+        "0:10\nFinal Actions Summary:<TRAIN SCV>\n", encoding="utf-8")
+    (tmp_path / "tmp" / "command.txt").write_text("0:12 <TRAIN SCV>\n", encoding="utf-8")
+
+
+def test_live_stream_replays_finished_game(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    write_live_game(tmp_path, META_LINE, FRAME_LINE, END_LINE)
+
+    response = client.get("/api/live/stream")
+
+    assert response.headers["content-type"].startswith("text/event-stream")
+    names = [line for line in response.text.splitlines() if line.startswith("event: ")]
+    assert names == ["event: meta", "event: frame", "event: decision",
+                     "event: command", "event: end"]
+
+
+def test_live_stream_resumes_from_query_offsets(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    write_live_game(tmp_path, META_LINE, FRAME_LINE, END_LINE)
+    offset = len((META_LINE + "\n" + FRAME_LINE + "\n").encode("utf-8"))
+
+    response = client.get(
+        f"/api/live/stream?records={offset}&decisions=1&commands=1")
+
+    names = [line for line in response.text.splitlines() if line.startswith("event: ")]
+    assert names == ["event: end"]
+
+
+def test_live_page_injects_stream_offset(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    write_live_game(tmp_path, META_LINE, FRAME_LINE)
+
+    response = client.get("/games/live")
+
+    assert response.status_code == 200
+    assert '"live":true' in response.text
+    assert '"stream":{"records":' in response.text
 
 
 def test_serve_bound_port_raises_command_error() -> None:

@@ -8,8 +8,9 @@
   (curl received correct `text/event-stream` framing).
 - **[FastAPI]** `from fastapi.responses import HTMLResponse` — observation page route
   returns the injected template.
-- **[uvicorn]** `uvicorn.Server(uvicorn.Config(app, host, port, log_level="error"))`
-  — in-process runner for `serve()`; `server.run()` blocks, no reload.
+- **[uvicorn]** `uvicorn.run(app, host=host, port=port)` — in-process runner for
+  `serve()`; a bound port exits via `sys.exit(3)` (`uvicorn.config.STARTUP_FAILURE`),
+  never raises `OSError` to the caller — catch `SystemExit` and check `code`.
 - **[burnysc2]** sampler reads the same AI fields `ReplayExporter.on_step` already
   samples (`cli/export.py`); `BotAI` and `ObserverAI` expose that shared surface.
 - **[asyncio]** live tail = poll loop: read new lines from a saved byte offset, then
@@ -33,7 +34,10 @@
 
 - Browser side uses the native `EventSource` API; the page enters live mode on the
   payload flag `live: true`.
-- Mid-game join without gap: fold the record file, remember its byte length, start
-  the stream from that offset.
+- Mid-game join without gap: fold the record file's complete lines, remember their
+  byte length (`stream.records` in the live payload), start the stream from that
+  offset; a trailing line without a newline is mid-write and stays out of both.
+- Decision entries span multiple `output.txt` lines, so byte offsets are unsafe for
+  logs; the stream re-parses both logs each poll and resumes by entry count.
 - Ports 8080, 8765, 8090, 11434 are occupied on the development host; the server
   default port stays off these.

@@ -5,7 +5,7 @@ Record kinds and payload shape: docs/design-observation.md.
 import json
 from itertools import chain
 from pathlib import Path
-from typing import TextIO
+from typing import Iterable, TextIO
 
 from sc2.bot_ai_internal import BotAIInternal
 from sc2.unit import Unit
@@ -96,11 +96,19 @@ def fold_records(path: Path) -> dict:
     None while the file has no `end` record. Raises FileNotFoundError when the
     record file does not exist and ValueError on an unknown record kind.
     """
+    with path.open(encoding="utf-8") as handle:
+        return fold_lines(handle)
+
+
+def fold_lines(lines: Iterable[str]) -> dict:
+    """Fold record lines into the same payload parts as `fold_records`.
+
+    Raises ValueError on an unknown record kind.
+    """
     payload: dict = {"meta": {}, "types": [], "type_meta": [],
                      "neutral": [], "frames": [], "result": None}
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            _fold_line(payload, json.loads(line))
+    for line in lines:
+        _fold_line(payload, json.loads(line))
     return payload
 
 

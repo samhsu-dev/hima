@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from cli.web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
-from cli.web.records import fold_records
+from cli.web.records import fold_lines
 from cli.workspace import RECORD_FILE
 
 LIVE_GAME_ID = "live"
@@ -32,13 +32,14 @@ class GameStore:
     def payload(self, game_id: str) -> dict:
         """Assemble one game's payload.
 
-        Raises KeyError when the id names no game and FileNotFoundError when
-        the game has no record file (the caller names the `hima export`
-        fallback).
+        A live payload carries `stream.records`, the record-file byte offset
+        the live stream continues from. Raises KeyError when the id names no
+        game and FileNotFoundError when the game has no record file (the
+        caller names the `hima export` fallback).
         """
         directory = self._game_dir(game_id)
-        folded = fold_records(directory / RECORD_FILE)
-        return {
+        folded, record_offset = _fold_snapshot(directory / RECORD_FILE)
+        payload = {
             "meta": {**folded["meta"], "replay": _replay_name(directory, game_id),
                      "result": folded["result"], "duration": _duration(folded["frames"])},
             "types": folded["types"],
@@ -49,6 +50,9 @@ class GameStore:
             "commands": parse_commands(directory / COMMAND_LOG),
             "live": game_id == LIVE_GAME_ID and folded["result"] is None,
         }
+        if payload["live"]:
+            payload["stream"] = {"records": record_offset}
+        return payload
 
     def _game_dir(self, game_id: str) -> Path:
         if game_id == LIVE_GAME_ID:
@@ -75,6 +79,17 @@ class GameStore:
         if not record_path.exists() or _has_end_record(record_path):
             return None
         return {"id": LIVE_GAME_ID, "result": None, "time": None}
+
+
+def _fold_snapshot(record_path: Path) -> tuple[dict, int]:
+    """Fold the record file's complete lines; returns the fold and its byte length.
+
+    A trailing line without a newline is still being written and stays out of
+    both the fold and the offset, so the live stream replays it in full.
+    """
+    data = record_path.read_bytes()
+    offset = data.rfind(b"\n") + 1
+    return fold_lines(data[:offset].decode("utf-8").splitlines()), offset
 
 
 def _has_end_record(record_path: Path) -> bool:

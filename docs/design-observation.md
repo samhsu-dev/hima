@@ -6,19 +6,21 @@ infrastructure over an already-confirmed record vocabulary, no non-trivial algor
 
 ## Design Overview
 
-- **Classes**: `GameSampler`, `GameStore`
+- **Classes**: `GameSampler`, `GameStore`, `StreamCursor`
 - **Modules**: `records` (schema: sampling and folding), `logs` (decision and command
-  log parsing), `games` (game listing and payload assembly), `server` (HTTP surface)
-- **Relationships**: `server` uses `games` (one-way). `games` uses `records` and
-  `logs`. `records` contains `GameSampler`. `games` contains `GameStore`.
+  log parsing), `games` (game listing and payload assembly), `stream` (live game
+  tailing), `server` (HTTP surface)
+- **Relationships**: `server` uses `games` and `stream` (one-way). `games` uses
+  `records` and `logs`. `stream` uses `logs`. `records` contains `GameSampler`.
+  `games` contains `GameStore`. `stream` contains `StreamCursor`.
   The bot process uses `records` (sampling side only). `cli.export` uses `records`
   (writes the same record file during re-simulation). `cli.viewer` uses `logs`.
 - **Abstract**: none.
 - **Exceptions**: `CommandError` (from `cli.errors`), raised by `server.serve` on
   startup failure; per-request failures map to HTTP status codes.
-- **Dependency roles**: Data holders: record dicts (schema below). Orchestrator:
-  `server`. Helpers: `records`, `logs`, `games` (stateless functions plus the two
-  classes).
+- **Dependency roles**: Data holders: record dicts (schema below), `StreamCursor`
+  (one client's stream progress: record byte offset, decision and command entry
+  counts). Orchestrator: `server`. Helpers: `records`, `logs`, `games`, `stream`.
 - **Assets**: `cli/player_template.html` gains a live-mode section: when the injected
   payload carries `live: true`, the page subscribes to the record stream and appends
   incoming records; all rendering code is shared with replay mode.
@@ -60,15 +62,25 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
     result and duration) plus a `live` entry when `tmp/frames.jsonl` exists without
     an `end` record.
   - `payload(game_id)` — Behavior: fold the game's record file and logs into the
-    payload; `live` reads from `tmp/`, other ids from `runs/<id>/`. Errors:
-    `KeyError` when the id names no game (server maps to 404); a game without a
-    record file reports the export fallback in the error detail.
+    payload; `live` reads from `tmp/`, other ids from `runs/<id>/`. A live payload
+    carries `stream.records`, the byte offset of the folded complete lines, so the
+    stream resumes without gap or duplication. Errors: `KeyError` when the id names
+    no game (server maps to 404); a game without a record file reports the export
+    fallback in the error detail.
 
 ## Function Specifications
 
 - **fold_records(path) -> dict** (`records`) — Behavior: read the record file,
   accumulate `meta`/`type`/`frame`/`end` records into `{meta, types, type_meta,
   neutral, frames, result}`. Errors: `FileNotFoundError` propagates.
+- **fold_lines(lines) -> dict** (`records`) — Behavior: the same fold over
+  in-memory lines; the live payload folds a complete-line snapshot so its byte
+  offset and its fold agree. Errors: `ValueError` on an unknown record kind.
+- **live_events(tmp_dir, cursor) -> async iterator** (`stream`) — Behavior: poll
+  the live game's three files, yield one SSE-framed event per record, decision,
+  and command appended past the cursor; `end` is always the final event and
+  terminates the stream. Input: `tmp/` path, `StreamCursor`. Errors: none raised;
+  an absent file reads as empty.
 - **parse_decisions(path) -> list[dict]**, **parse_commands(path) -> list[dict]**
   (`logs`) — moved unchanged from `cli.viewer`; absent file returns an empty list
   (the page renders without that panel).
@@ -81,7 +93,8 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
 - **stream events** — the live endpoint tails `tmp/frames.jsonl`, `output.txt`, and
   `command.txt`, emitting each new record with its kind (`frame`/`type`/`decision`/
   `command`/`end`); a client joining mid-game gets the payload from `/games/live`
-  first, then only records newer than its payload.
+  first, then resumes via query parameters: `records` (the payload's `stream.records`
+  byte offset) plus `decisions` and `commands` (its entry counts).
 
 ## Integration Changes (outside `cli/web/`)
 

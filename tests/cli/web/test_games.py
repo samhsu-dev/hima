@@ -11,6 +11,9 @@ Test cases:
   logs into the exported-page shape with live False for archived games.
 - test_payload_live_game_sets_live_flag: an unfinished live game reports
   live True.
+- test_payload_live_game_carries_stream_offset: a live payload's stream
+  offset covers exactly the folded complete lines; a partial trailing line
+  stays out of both. Archived payloads carry no stream field.
 - test_payload_unknown_id_raises_key_error: unknown id raises KeyError.
 - test_payload_traversal_id_raises_key_error: a path-traversal id raises
   KeyError instead of escaping runs_dir.
@@ -99,6 +102,21 @@ def test_payload_live_game_sets_live_flag(tmp_path: Path) -> None:
 
     assert payload["live"] is True
     assert payload["meta"]["result"] is None
+
+
+def test_payload_live_game_carries_stream_offset(tmp_path: Path) -> None:
+    store = make_store(tmp_path)
+    complete = META_LINE + "\n" + FRAME_LINE + "\n"
+    (store.tmp_dir / "frames.jsonl").write_text(
+        complete + '{"k":"frame","t":10', encoding="utf-8")
+    make_run(store.runs_dir, "20260101_a", "Victory")
+
+    live = store.payload("live")
+    archived = store.payload("20260101_a")
+
+    assert live["stream"] == {"records": len(complete.encode("utf-8"))}
+    assert len(live["frames"]) == 1
+    assert "stream" not in archived
 
 
 def test_payload_unknown_id_raises_key_error(tmp_path: Path) -> None:
