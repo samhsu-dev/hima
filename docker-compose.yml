@@ -24,6 +24,14 @@ services:
       - "8090:8090"
     volumes:
       - hf-cache:/models
+    healthcheck:
+      # /health responds only once model loading completes; loading the three
+      # advisor models on CPU takes minutes, hence the long start period.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 600s
 
   webui:
     build: *hima-image
@@ -41,6 +49,11 @@ services:
       - "11434:11434"
     volumes:
       - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     # Linux host with NVIDIA GPU: uncomment for GPU inference.
     # deploy:
     #   resources:
@@ -57,6 +70,29 @@ services:
       dockerfile: docker/leader.Dockerfile
     ports:
       - "11434:11434"
+
+  # Containerized game (experimental): SC2 4.10 headless under amd64
+  # emulation on Apple silicon; results are not comparable with retail
+  # 5.0.16 runs. Requires the default ollama form (the leader endpoint is
+  # the ollama service name). Build steps: docker/game.Dockerfile header.
+  game:
+    profiles: ["game"]
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/game.Dockerfile
+      args:
+        SC2_LICENSE: ${SC2_LICENSE:-}
+    image: hima-game
+    command: hima run --advisor-host advisor --base-url http://ollama:11434/v1
+    volumes:
+      - ./runs:/app/runs
+      - ./tmp:/app/tmp
+    depends_on:
+      advisor:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
 
 volumes:
   hf-cache:

@@ -54,5 +54,17 @@
 - After editing `[tool.uv.sources]`: `uv lock`, commit `uv.lock`.
 - Image build runs `uv run hima setup` after the final sync so the three
   site-packages patches land inside the image venv.
+- PySC2 4.0.0 wheel ships the colors.py shuffle line with a trailing
+  `# Return a fixed shuffle` comment; the patch target includes it — a fresh
+  install (image build) fails setup with a comment-less target.
 - Compose: default profile = advisor + ollama + webui; `--profile baked` swaps the
   leader; `--profile game` adds the containerized game (linux/amd64 only).
+- `FROM` of a local tag ignores the requested build platform, so the game image
+  needs a separate amd64 base tag:
+  `docker build --platform linux/amd64 -t hima:amd64 -f docker/hima.Dockerfile .`.
+- Compose forwards `SC2_LICENSE` from the environment (`${SC2_LICENSE:-}`); an
+  empty value fails the guard layer naming the argument before any download.
+- python:3.12-slim has no curl; the advisor healthcheck runs
+  `python -c "urllib.request.urlopen(...)"` from the image venv on PATH.
+- The ladder map is not redistributable: `docker/maps/` is gitignored and filled
+  from the retail install before building the game image.

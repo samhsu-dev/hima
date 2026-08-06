@@ -30,6 +30,8 @@ services, and their interfaces. No classes; components only.
 ### game (`docker/game.Dockerfile`)
 - **Responsibility**: The hima image plus the StarCraft II Linux headless client
   (4.10) and the ladder map pool including Ancient Cistern LE.
+- **Base**: `hima:amd64` — the hima image built with `--platform linux/amd64`,
+  consumed via the `HIMA_IMAGE` build argument.
 - **Build argument**: the license-acceptance string unpacking Blizzard's archive;
   no default value — the build fails until the user supplies it.
 - **Constraint**: `linux/amd64` only; on Apple silicon it runs emulated and slow.

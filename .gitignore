@@ -6,3 +6,4 @@ tmp/
 runs/
 *.viewer.html
 docs/todo.md
+docker/maps/
