@@ -11,7 +11,7 @@ from pathlib import Path
 from cli.errors import CommandError
 from cli.workspace import REPO_ROOT
 
-_COLORS_TARGET = "random.shuffle(palette, lambda: 0.5)"
+_COLORS_TARGET = "random.shuffle(palette, lambda: 0.5)  # Return a fixed shuffle"
 _COLORS_MARKER = "replicate the"
 _PLAY_TARGET = "run_config = run_configs.get(version=version)  # Replace the run config."
 _PLAY_MARKER = "postdates pysc2's version table"
