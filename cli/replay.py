@@ -1,0 +1,21 @@
+"""Open a replay in the pysc2 human renderer."""
+import subprocess
+import sys
+from pathlib import Path
+
+from cli.errors import CommandError
+from cli.workspace import REPO_ROOT
+
+
+def play(replay_path: Path) -> None:
+    if not replay_path.exists():
+        raise CommandError(f"replay not found: {replay_path}")
+    argv = [
+        sys.executable, "-m", "pysc2.bin.play",
+        "--replay", str(replay_path.resolve()),
+        # The macOS retail client crashes on the RGB render interface; feature
+        # layers only.
+        "--rgb_screen_size", "0",
+        "--rgb_minimap_size", "0",
+    ]
+    subprocess.run(argv, cwd=REPO_ROOT)

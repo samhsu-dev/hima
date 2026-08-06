@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIMA 回放播放器</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e;
+    --own: #4aa3ff; --enemy: #ff5252; --mineral: #67e8f9; --gas: #c084fc;
+    --accent: #f0883e;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  header {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header .badge {
+    font-size: 13px; padding: 1px 10px; border-radius: 10px; font-weight: 600;
+  }
+  .badge.Defeat { background: #67060c; color: #ffb3b8; }
+  .badge.Victory { background: #0f5323; color: #9ff0b5; }
+  .badge.Tie { background: #3a3f45; color: #d0d7de; }
+  header .muted { color: var(--muted); font-size: 13px; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px; min-width: 0; }
+  canvas { max-width: 100%; max-height: 100%; border: 1px solid var(--border); border-radius: 6px; }
+  aside {
+    width: 340px; border-left: 1px solid var(--border); display: flex;
+    flex-direction: column; min-height: 0;
+  }
+  aside h2 {
+    font-size: 13px; color: var(--muted); font-weight: 600;
+    padding: 8px 12px 4px; letter-spacing: .06em;
+  }
+  #decisions { flex: 1.2; overflow-y: auto; border-bottom: 1px solid var(--border); }
+  #commands { flex: 1; overflow-y: auto; }
+  .decision {
+    padding: 6px 12px; border-left: 3px solid transparent; cursor: pointer;
+    font-size: 13px; color: var(--muted);
+  }
+  .decision:hover { background: var(--panel); }
+  .decision.active { border-left-color: var(--accent); color: var(--text); background: var(--panel); }
+  .decision .head { font-weight: 600; color: var(--accent); }
+  .command { padding: 2px 12px; font-size: 13px; font-family: ui-monospace, Menlo, monospace; }
+  .command .st-ok { color: #7ee787; }
+  .command .st-bad { color: #ff7b72; }
+  footer {
+    border-top: 1px solid var(--border); padding: 10px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  button, select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 12px; font-size: 15px; cursor: pointer;
+  }
+  #timeline { flex: 1; position: relative; height: 28px; }
+  #slider { width: 100%; position: absolute; top: 4px; }
+  #ticks { position: absolute; left: 0; right: 0; top: 22px; height: 6px; pointer-events: none; }
+  #ticks span { position: absolute; width: 2px; height: 6px; background: var(--accent); }
+  #readout { font-size: 14px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #clock { font-size: 15px; font-variant-numeric: tabular-nums; min-width: 110px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span id="result" class="badge"></span>
+  <span id="mapname" class="muted"></span>
+  <span class="muted">敌方单位仅在我方视野内可见（战争迷雾）</span>
+</header>
+<main>
+  <div id="stage"><canvas id="map"></canvas></div>
+  <aside>
+    <h2>LLM 决策（点击跳转）</h2>
+    <div id="decisions"></div>
+    <h2>已执行命令</h2>
+    <div id="commands"></div>
+  </aside>
+</main>
+<footer>
+  <button id="play">▶ 播放</button>
+  <select id="speed">
+    <option value="1">1×</option>
+    <option value="2">2×</option>
+    <option value="4" selected>4×</option>
+    <option value="8">8×</option>
+    <option value="16">16×</option>
+  </select>
+  <span id="clock"></span>
+  <div id="timeline">
+    <input id="slider" type="range" min="0" step="0.1" value="0">
+    <div id="ticks"></div>
+  </div>
+  <span id="readout"></span>
+</footer>
+<script>
+const HIMA = __HIMA_DATA_JSON__;
+
+const [PX, PY, PW, PH] = HIMA.meta.playable;
+const DURATION = HIMA.meta.duration;
+const canvas = document.getElementById("map");
+const ctx = canvas.getContext("2d");
+const CSS_W = 780;
+const SCALE = CSS_W / PW;
+const CSS_H = Math.round(PH * SCALE);
+const DPR = window.devicePixelRatio || 1;
+canvas.width = CSS_W * DPR;
+canvas.height = CSS_H * DPR;
+canvas.style.width = CSS_W + "px";
+canvas.style.height = CSS_H + "px";
+ctx.scale(DPR, DPR);
+
+const mx = x => (x - PX) * SCALE;
+const my = y => (PH - (y - PY)) * SCALE;
+const fmt = t => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+document.getElementById("title").textContent = HIMA.meta.replay;
+document.getElementById("mapname").textContent = `${HIMA.meta.map} · ${fmt(DURATION)}`;
+const resultEl = document.getElementById("result");
+resultEl.textContent = HIMA.meta.result;
+resultEl.classList.add(HIMA.meta.result);
+
+const slider = document.getElementById("slider");
+slider.max = DURATION;
+const ticks = document.getElementById("ticks");
+for (const d of HIMA.decisions) {
+  const s = document.createElement("span");
+  s.style.left = (d.t / DURATION * 100) + "%";
+  ticks.appendChild(s);
+}
+
+const decisionsEl = document.getElementById("decisions");
+HIMA.decisions.forEach((d, i) => {
+  const div = document.createElement("div");
+  div.className = "decision";
+  div.id = "dec-" + i;
+  div.innerHTML = `<span class="head">${fmt(d.t)} · ${d.n} 个动作</span><br>${escapeHtml(d.s)}`;
+  div.onclick = () => { simT = d.t; syncAll(true); };
+  decisionsEl.appendChild(div);
+});
+
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function frameIndexFor(t) {
+  const f = HIMA.frames;
+  let lo = 0, hi = f.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (f[mid].t <= t) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+
+function drawFrame(frame) {
+  ctx.fillStyle = "#0b1220";
+  ctx.fillRect(0, 0, CSS_W, CSS_H);
+  for (const [x, y, kind] of HIMA.neutral) {
+    ctx.fillStyle = kind === "m" ? "rgba(103,232,249,.5)" : "rgba(192,132,252,.6)";
+    ctx.fillRect(mx(x) - 2, my(y) - 2, 4, 4);
+  }
+  for (const [ti, x, y, owner, hp] of frame.u) {
+    const meta = HIMA.type_meta[ti];
+    const color = owner === 1 ? "#4aa3ff" : "#ff5252";
+    const r = Math.max(meta.r * SCALE, 1.6);
+    ctx.fillStyle = color;
+    if (meta.s) {
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(mx(x) - r, my(y) - r, r * 2, r * 2);
+    } else {
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(mx(x), my(y), r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (hp < 0.99) {
+      const w = Math.max(r * 2, 8);
+      ctx.fillStyle = "#30363d";
+      ctx.fillRect(mx(x) - w / 2, my(y) - r - 5, w, 2.5);
+      ctx.fillStyle = hp > 0.5 ? "#7ee787" : "#ff7b72";
+      ctx.fillRect(mx(x) - w / 2, my(y) - r - 5, w * hp, 2.5);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function updatePanels(frame) {
+  let own = 0, enemy = 0;
+  for (const u of frame.u) (u[3] === 1 ? own++ : enemy++);
+  document.getElementById("readout").textContent =
+    `矿 ${frame.m} · 气 ${frame.g} · 补给 ${frame.su}/${frame.sc} · 我方 ${own} · 敌方可见 ${enemy}`;
+  let active = -1;
+  HIMA.decisions.forEach((d, i) => { if (d.t <= simT) active = i; });
+  document.querySelectorAll(".decision").forEach((el, i) => el.classList.toggle("active", i === active));
+  if (active >= 0 && playing) {
+    document.getElementById("dec-" + active).scrollIntoView({ block: "nearest" });
+  }
+  const visible = HIMA.commands.filter(c => c.t <= simT).slice(-14);
+  document.getElementById("commands").innerHTML = visible.map(c => {
+    const bad = c.st !== "ok";
+    return `<div class="command">${fmt(c.t)} &lt;${c.a}&gt; ` +
+      `<span class="${bad ? "st-bad" : "st-ok"}">${bad ? c.st : "✓"}</span></div>`;
+  }).join("");
+  document.getElementById("commands").scrollTop = 1e9;
+}
+
+let simT = 0, playing = false, lastTs = null, lastIdx = -1;
+
+function syncAll(force) {
+  const idx = frameIndexFor(simT);
+  if (idx !== lastIdx || force) {
+    drawFrame(HIMA.frames[idx]);
+    updatePanels(HIMA.frames[idx]);
+    lastIdx = idx;
+  }
+  slider.value = simT;
+  document.getElementById("clock").textContent = `${fmt(simT)} / ${fmt(DURATION)}`;
+}
+
+function tick(ts) {
+  if (lastTs !== null && playing) {
+    simT = Math.min(simT + (ts - lastTs) / 1000 * Number(speedEl.value), DURATION);
+    if (simT >= DURATION) setPlaying(false);
+    syncAll(false);
+  }
+  lastTs = ts;
+  requestAnimationFrame(tick);
+}
+
+const playBtn = document.getElementById("play");
+const speedEl = document.getElementById("speed");
+function setPlaying(value) {
+  playing = value;
+  playBtn.textContent = playing ? "⏸ 暂停" : "▶ 播放";
+}
+playBtn.onclick = () => {
+  if (!playing && simT >= DURATION) simT = 0;
+  setPlaying(!playing);
+};
+slider.oninput = () => { simT = Number(slider.value); syncAll(true); };
+
+syncAll(true);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
