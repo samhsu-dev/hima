@@ -17,6 +17,7 @@ class RunOptions:
     enemy_race: str
     seed: int
     port: int
+    advisor_host: str
     model: str
     base_url: str
     realtime: bool
@@ -47,6 +48,7 @@ def _invoke_game(options: RunOptions) -> None:
         # equal to --port for every seed; hima manages a single advisor server.
         "--num_server", "1",
         "--port", str(options.port),
+        "--advisor_host", options.advisor_host,
         "--LLM_api_text", options.model,
         "--LLM_base_url", options.base_url,
         "--LLM_api_key", "ollama",

@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='StarCraft II agent')
     parser.add_argument('--port', default=8080, type=int)
     parser.add_argument('--num_server', default=3, type=int)
+    parser.add_argument('--advisor_host', default='localhost')
     parser.add_argument('--save_path', default='tmp')
     parser.add_argument('--temperature', default=0.7)
     parser.add_argument('--LLM_api_text', default='gpt-4o-mini')

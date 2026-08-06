@@ -328,7 +328,7 @@ class HIMA(BotAI):
             "prompt": json.dumps(query_input),
             "temperature": self.args.temperature
         }
-        r = requests.post(f"http://localhost:{self.server}/infer", json=user_input)
+        r = requests.post(f"http://{self.args.advisor_host}:{self.server}/infer", json=user_input)
         r.raise_for_status()
         query_input = self.generate_input(observation, actions=r.json()["text"])
         command = self.leader_inference(query_input)

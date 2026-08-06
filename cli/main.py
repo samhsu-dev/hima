@@ -5,7 +5,7 @@ from pathlib import Path
 
 from cli import experiment, metrics, patches, replay, services, viewer
 from cli.errors import CommandError
-from cli.services import DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
+from cli.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
 from cli.web import server
 from cli.web.records import DEFAULT_SAMPLE_INTERVAL
 
@@ -66,6 +66,7 @@ def _add_run(sub: "argparse._SubParsersAction") -> None:
     run.add_argument("--enemy-race", default="Zerg", choices=RACES)
     run.add_argument("--seed", type=int, default=3)
     run.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)
+    run.add_argument("--advisor-host", default=DEFAULT_ADVISOR_HOST)
     run.add_argument("--model", default=DEFAULT_LEADER_MODEL)
     run.add_argument("--base-url", default=DEFAULT_LEADER_BASE_URL)
     run.add_argument("--realtime", action="store_true")
@@ -78,6 +79,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         enemy_race=args.enemy_race,
         seed=args.seed,
         port=args.port,
+        advisor_host=args.advisor_host,
         model=args.model,
         base_url=args.base_url,
         realtime=args.realtime,

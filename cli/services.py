@@ -13,6 +13,7 @@ from cli.errors import CommandError
 from cli.workspace import REPO_ROOT, SC2_APP, SERVICE_DIR
 
 OLLAMA_URL = "http://localhost:11434"
+DEFAULT_ADVISOR_HOST = "localhost"
 DEFAULT_ADVISOR_PORT = 8090
 DEFAULT_LEADER_MODEL = "qwen3:8b"
 HEALTH_ATTEMPTS = 120
