@@ -66,6 +66,12 @@ async def _run_text(model_id: str, q: Query) -> str:
     return response.replace("\n", "")
 
 
+@app.get("/health")
+async def health():
+    # Module import blocks on model loading, so reaching here means ready.
+    return {"status": "ok", "models": sorted(MODELS)}
+
+
 @app.post("/infer")
 async def infer_all(q: Query):
     tasks = [_run_text(mid, q) for mid in ("0", "1", "2")]

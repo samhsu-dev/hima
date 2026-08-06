@@ -35,7 +35,7 @@ def advisor_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="advisor",
         argv=[sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)],
-        health_url=f"http://127.0.0.1:{port}/docs",
+        health_url=f"http://127.0.0.1:{port}/health",
         pid_file=SERVICE_DIR / "advisor.pid",
         log_file=SERVICE_DIR / "advisor.log",
         process_keyword="uvicorn",
