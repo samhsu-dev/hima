@@ -7,3 +7,5 @@
 | design-cli.md | Modules, classes, and command specifications of the `hima` CLI |
 | design-observation.md | Record schema, sampler, store, and server of the observation subsystem |
 | design-deployment.md | Image and compose service specifications of the deployment layer |
+| impl-observation.md | Verified SSE, uvicorn, and record-file APIs for the observation design |
+| impl-deployment.md | Verified uv, torch-CPU, ollama, and SC2 Linux facts for deployment |
