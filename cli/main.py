@@ -6,6 +6,7 @@ from pathlib import Path
 from cli import experiment, metrics, patches, replay, services, viewer
 from cli.errors import CommandError
 from cli.services import DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
+from cli.web import server
 from cli.web.records import DEFAULT_SAMPLE_INTERVAL
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
@@ -34,6 +35,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_run(sub)
     _add_metrics(sub)
     _add_viewer(sub)
+    _add_serve(sub)
     return parser
 
 
@@ -103,6 +105,13 @@ def _add_viewer(sub: "argparse._SubParsersAction") -> None:
     show.add_argument("path", type=Path)
     show.add_argument("--sample", type=int, default=DEFAULT_SAMPLE_INTERVAL)
     show.set_defaults(func=lambda args: viewer.view(args.path, args.sample))
+
+
+def _add_serve(sub: "argparse._SubParsersAction") -> None:
+    observe = sub.add_parser("serve", help="serve the game observation web UI")
+    observe.add_argument("--host", default=server.DEFAULT_HOST)
+    observe.add_argument("--port", type=int, default=server.DEFAULT_PORT)
+    observe.set_defaults(func=lambda args: server.serve(args.host, args.port))
 
 
 def _cmd_export(args: argparse.Namespace) -> None:
