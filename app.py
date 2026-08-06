@@ -21,13 +21,14 @@ def load_text(name: str, device: str):
     }
 
 MODELS = {
-    "0": load_text("mounKim/qwen3-tank-a", "auto"),
-    "1": load_text("mounKim/qwen3-tank-b", "auto"),
-    "2": load_text("mounKim/qwen3-tank-c", "auto"),
+    "0": load_text("SNUMPR/Terran-a", "auto"),
+    "1": load_text("SNUMPR/Terran-b", "auto"),
+    "2": load_text("SNUMPR/Terran-c", "auto"),
 }
 
 
-executor = ThreadPoolExecutor(max_workers=3)
+# PyTorch MPS backend segfaults on concurrent generate() calls; serialize GPU access
+executor = ThreadPoolExecutor(max_workers=1)
 
 
 class Query(BaseModel):

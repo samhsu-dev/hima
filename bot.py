@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import json
 import utils
@@ -20,7 +21,7 @@ class HIMA(BotAI):
         self.args = args
         self.own_race = args.own_race
         self.enemy_race = args.enemy_race
-        self.leader = OpenAI(api_key=args.LLM_api_key)
+        self.leader = OpenAI(api_key=args.LLM_api_key, base_url=args.LLM_base_url)
         self.server = (self.args.seed % self.args.num_server) + self.args.port
 
         self.prompt = Prompt(self.own_race)
@@ -290,6 +291,9 @@ class HIMA(BotAI):
 
     def leader_inference(self, user_input):
         utils.save_data_to_file(user_input, os.path.join(self.game_folder, "input.txt"))
+        if self.args.LLM_base_url is not None:
+            # Qwen3 soft switch: suppress runaway <think> generation on local leaders
+            user_input = f"{user_input} /no_think"
         self.messages = [
             {"role": "system", "content": self.text_prompt[0]},
             {"role": "user", "content": self.text_prompt[1]},
@@ -311,7 +315,8 @@ class HIMA(BotAI):
                 time.sleep(7)
 
         utils.save_data_to_file(f"{self.time_formatted}\n{response.strip()}", os.path.join(self.game_folder, "output.txt"))
-        return response
+        # reasoning models emit <think> blocks whose rehearsed text can confuse action extraction
+        return re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
 
     def agent_inference(self, observation):
         query_input = self.generate_input(observation, agent='LM')

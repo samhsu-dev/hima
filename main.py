@@ -14,12 +14,13 @@ from bots.textstarcraft import TextStarCraft
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='StarCraft II agent')
-    parser.add_argument('--port', default=8080)
-    parser.add_argument('--num_server', default=3)
+    parser.add_argument('--port', default=8080, type=int)
+    parser.add_argument('--num_server', default=3, type=int)
     parser.add_argument('--save_path', default='tmp')
     parser.add_argument('--temperature', default=0.7)
     parser.add_argument('--LLM_api_text', default='gpt-4o-mini')
     parser.add_argument('--LLM_api_key', default="YOUR_API_KEY")
+    parser.add_argument('--LLM_base_url', default=None)
     parser.add_argument('--realtime', action='store_true', default=False)
 
     parser.add_argument(
