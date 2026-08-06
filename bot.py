@@ -7,6 +7,7 @@ import random
 import requests
 import constants
 import numpy as np
+from pathlib import Path
 from prompt import Prompt
 from openai import OpenAI
 from sc2.data import Race
@@ -14,6 +15,9 @@ from sc2.bot_ai import BotAI
 from collections import deque
 from collections import Counter
 from sc2.ids.unit_typeid import UnitTypeId
+
+from cli.web.records import GameSampler
+from cli.workspace import RECORD_FILE
 
 
 class HIMA(BotAI):
@@ -369,8 +373,10 @@ class HIMA(BotAI):
             self.location = 1
         self.next_scout, self.next_refresh, self.next_inference, self.next_combat, self.agent_call = 4000, 9999, 0, 0, 0
         self.apu, self.successful_actions, self.gas_list, self.units_before = [], [], [], []
+        self.sampler = GameSampler(Path(self.game_folder) / RECORD_FILE)
 
     async def on_step(self, iteration):
+        self.sampler.step(self, iteration)
         if not self.townhalls:
             return
         self.iteration = iteration
@@ -420,3 +426,4 @@ class HIMA(BotAI):
                        "elapsed_time": int(time.time() - self.current_time),
                        "apu": round(np.mean(self.apu), 2), "rur": self.rur, "pbr": round((self.pbr / self.time), 2),
                        "tr": sum([research for research in observation["research"].values() if research == 1])}, f, indent=4)
+        self.sampler.finish(game_result.name)
