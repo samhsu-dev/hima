@@ -1,9 +1,14 @@
-# Only app.py is copied into images; keep the build context minimal.
+# Build context for docker/*.Dockerfile: the locked project only. Runtime
+# data (tmp/, runs/) reaches containers as bind mounts, never baked in.
 .venv/
 .git/
+.pytest_cache/
+.DS_Store
+__pycache__/
 tmp/
 runs/
-__pycache__/
+docs/
+tests/
+image.png
 *.SC2Replay
 *.viewer.html
-uv.lock

@@ -20,8 +20,8 @@ services, and their interfaces. No classes; components only.
 ### hima (`docker/hima.Dockerfile`)
 - **Responsibility**: One Python runtime for every service; built with uv from the
   committed lock, no resolution at build time.
-- **Layers**: uv base image → `uv sync --frozen --no-dev` from `pyproject.toml` +
-  `uv.lock` → copy project source.
+- **Layers**: uv base image → `uv sync --locked --no-dev` from `pyproject.toml` +
+  `uv.lock` → copy project source → `uv run hima setup` (site-packages patches).
 - **Interfaces**: no default command; each compose service sets its own.
 - **Constraint**: Linux torch resolves from the CPU wheel index
   (`[tool.uv.sources]`, marker `sys_platform == 'linux'`); macOS keeps the default
@@ -51,6 +51,8 @@ services, and their interfaces. No classes; components only.
 
 - `ollama` and `leader-baked` are alternatives on the same port; `baked` profile
   selects the second.
+- `advisor` serves `GET /health`, ready only after model loading completes; the
+  host-side health precheck polls it.
 - `game` passes `--advisor-host advisor` and `--base-url http://ollama:11434/v1`;
   the host-native game keeps the localhost defaults. This requires the advisor host
   to become an argument: `main.py --advisor_host` (default `localhost`), consumed by
