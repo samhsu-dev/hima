@@ -1,0 +1,49 @@
+# Model services only. StarCraft II (retail 5.0.16) and the game loop stay on
+# the host: the macOS client cannot run in a Linux container, and macOS Docker
+# has no Metal/MPS passthrough. Point `hima run` at these services with
+# --port 8090 --base-url http://localhost:11434/v1 (the defaults).
+#
+# Default form — stock Ollama, model pulled once per device into a volume:
+#   docker compose up -d advisor ollama
+#   docker compose exec ollama ollama pull qwen3:8b
+#
+# Baked form — qwen3:8b inside the image, no per-device pull (offline-capable):
+#   docker compose --profile baked build leader-baked
+#   docker compose --profile baked up -d advisor leader-baked
+
+services:
+  advisor:
+    build:
+      context: .
+      dockerfile: docker/advisor.Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - hf-cache:/models
+
+  ollama:
+    image: ollama/ollama:0.32.5
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    # Linux host with NVIDIA GPU: uncomment for GPU inference.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  leader-baked:
+    profiles: ["baked"]
+    build:
+      context: .
+      dockerfile: docker/leader.Dockerfile
+    ports:
+      - "11434:11434"
+
+volumes:
+  hf-cache:
+  ollama:

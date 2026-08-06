@@ -1,0 +1,9 @@
+# Only app.py is copied into images; keep the build context minimal.
+.venv/
+.git/
+tmp/
+runs/
+__pycache__/
+*.SC2Replay
+*.viewer.html
+uv.lock
