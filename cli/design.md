@@ -9,11 +9,14 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 - **Classes**: `ServiceSpec`, `ReplayExporter`, `CommandError`
 - **Modules**: `main` (dispatch), `workspace` (paths), `services`, `patches`,
-  `experiment`, `metrics`, `replay`, `export`, `viewer`
+  `experiment`, `metrics`, `replay`, `export`, `viewer`; subpackage `web/`
+  (game observation — own `concept.md` and `design.md`)
 - **Relationships**: `main` dispatches to every command module (one-way).
-  `viewer` uses `export` (frame data) and `workspace`. `experiment` uses `services`
-  (health precheck) and `workspace`. `services` contains `ServiceSpec`.
-  `export` contains `ReplayExporter`. All command modules use `workspace`.
+  `viewer` uses `export` (frame data) and `web.logs` (decision and command parsing).
+  `export` uses `web.records` (record file written during re-simulation).
+  `experiment` uses `services` (health precheck) and `workspace`. `services`
+  contains `ServiceSpec`. `export` contains `ReplayExporter`. All command modules
+  use `workspace`.
 - **Abstract**: `sc2.observer_ai.ObserverAI` (implemented by `ReplayExporter`)
 - **Exceptions**: `CommandError` extends `Exception`, raised by every command module,
   handled only in `main`
@@ -21,6 +24,8 @@ infrastructure, no domain semantics, no non-trivial algorithm.
   Helpers: all command modules (stateless functions).
 - **Assets**: `player_template.html` — self-contained canvas player; `viewer` injects
   exported JSON into its placeholder to produce one standalone HTML file per replay.
+  The observation server injects the same payload into the same template
+  (`web/design.md`).
 
 ## Class / Type Specifications
 
@@ -72,9 +77,11 @@ Each command module exposes one public entry consumed by `main`.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
   Behavior: precheck services, invoke `main.py` with `--num_server 1` (keeps the
   advisor port independent of `--seed`), stream its output, then archive
-  `tmp/{command,input,output,prompt}.txt`, `metric.json`, and the result-named
-  replay into `runs/<replay-stem>/`, and print the metric summary.
-  Input: difficulty, enemy race, seed, port, leader model, base URL, realtime flag.
+  `tmp/{command,input,output,prompt}.txt`, `metric.json`, `frames.jsonl`, and the
+  result-named replay into `runs/<replay-stem>/`, and print the metric summary.
+  Input: difficulty, enemy race, seed, port, advisor host (default `localhost`,
+  forwarded as `main.py --advisor_host` for containerized runs), leader model,
+  base URL, realtime flag.
   Errors: `CommandError` on unhealthy services or non-zero exit of `main.py`.
 - **metrics() -> None** (`metrics`) — Behavior: read every `runs/*/metric.json`
   plus an unarchived `tmp/metric.json`, print one aligned table
@@ -87,11 +94,14 @@ Each command module exposes one public entry consumed by `main`.
   the replay with `ReplayExporter` (direct `_setup_replay`/`_play_replay` hosting:
   burnysc2 7.3.0 `run_replay` drops `observed_id`, causing `Race.NoRace`), parse
   leader decisions (`output.txt`) and executed commands (`command.txt`) from
-  `logs_dir`, inject all data into `player_template.html`, write one standalone
+  `logs_dir`, write the record file `frames.jsonl` beside the logs (`web/design.md`),
+  inject all data into `player_template.html`, write one standalone
   HTML next to the replay (or `out`). Output: written path.
   Errors: `CommandError` when the replay is missing; engine failures propagate.
 - **view(path) -> None** (`viewer`) — Behavior: `export` when given a replay (reuse
   an existing export when present), then open the HTML in the default browser.
+- **serve(host, port) -> None** (`web.server`) — the observation server; full
+  specification in `web/design.md`.
 
 ## Exception / Error Types
 
