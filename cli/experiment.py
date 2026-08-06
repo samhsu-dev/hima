@@ -33,12 +33,19 @@ def run(options: RunOptions) -> None:
 
 
 def _require_services(options: RunOptions) -> None:
-    if not services.advisor_healthy(options.port):
-        raise CommandError(f"advisor server not healthy on port {options.port} — run `hima start`")
-    if not services.ollama_healthy():
-        raise CommandError("ollama not healthy — run `hima start`")
-    if not services.leader_model_present(options.model):
+    if not services.advisor_healthy(options.advisor_host, options.port):
+        raise CommandError(
+            f"advisor server not healthy at {options.advisor_host}:{options.port} — run `hima start`")
+    root = _leader_root(options.base_url)
+    if not services.ollama_healthy(root):
+        raise CommandError(f"ollama not healthy at {root} — run `hima start`")
+    if not services.leader_model_present(root, options.model):
         raise CommandError(f"leader model {options.model} absent — run `hima start`")
+
+
+def _leader_root(base_url: str) -> str:
+    """The Ollama server root behind an OpenAI-compatible base URL."""
+    return base_url.removesuffix("/v1")
 
 
 def _invoke_game(options: RunOptions) -> None:

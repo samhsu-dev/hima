@@ -35,7 +35,7 @@ def advisor_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="advisor",
         argv=[sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)],
-        health_url=f"http://127.0.0.1:{port}/health",
+        health_url=_advisor_health_url("127.0.0.1", port),
         pid_file=SERVICE_DIR / "advisor.pid",
         log_file=SERVICE_DIR / "advisor.log",
         process_keyword="uvicorn",
@@ -53,22 +53,26 @@ def ollama_spec() -> ServiceSpec:
     )
 
 
-def advisor_healthy(port: int) -> bool:
-    return _healthy(advisor_spec(port).health_url)
+def advisor_healthy(host: str, port: int) -> bool:
+    return _healthy(_advisor_health_url(host, port))
 
 
-def ollama_healthy() -> bool:
-    return _healthy(ollama_spec().health_url)
+def ollama_healthy(root: str) -> bool:
+    return _healthy(f"{root}/api/tags")
 
 
-def leader_model_present(model: str) -> bool:
+def leader_model_present(root: str, model: str) -> bool:
     try:
-        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
+        response = requests.get(f"{root}/api/tags", timeout=3)
         response.raise_for_status()
     except requests.RequestException:
         return False
     names = [entry["name"] for entry in response.json().get("models", [])]
     return any(name == model or name.startswith(f"{model}:") for name in names)
+
+
+def _advisor_health_url(host: str, port: int) -> str:
+    return f"http://{host}:{port}/health"
 
 
 def start(port: int, model: str, skip_pull: bool) -> None:
@@ -93,8 +97,8 @@ def _collect_checks(port: int, model: str) -> list[tuple[str, bool, str]]:
     advisor = advisor_spec(port)
     checks = [
         ("advisor server", _healthy(advisor.health_url), advisor.health_url),
-        ("ollama server", ollama_healthy(), OLLAMA_URL),
-        (f"leader model {model}", leader_model_present(model), "ollama tags"),
+        ("ollama server", ollama_healthy(OLLAMA_URL), OLLAMA_URL),
+        (f"leader model {model}", leader_model_present(OLLAMA_URL, model), "ollama tags"),
         ("SC2 installation", SC2_APP.exists(), str(SC2_APP)),
     ]
     checks.extend((label, ok, "site-packages") for label, ok in patches.patch_states())
