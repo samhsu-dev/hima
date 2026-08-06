@@ -7,4 +7,5 @@ RUNS_DIR = REPO_ROOT / "runs"
 SERVICE_DIR = TMP_DIR / "services"
 SC2_APP = Path("/Applications/StarCraft II")
 
-GAME_OUTPUTS = ("command.txt", "input.txt", "output.txt", "prompt.txt", "metric.json")
+RECORD_FILE = "frames.jsonl"
+GAME_OUTPUTS = ("command.txt", "input.txt", "output.txt", "prompt.txt", "metric.json", RECORD_FILE)

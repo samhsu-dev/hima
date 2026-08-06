@@ -7,6 +7,7 @@ from pathlib import Path
 from cli.errors import CommandError
 from cli.export import export_frames
 from cli.web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
+from cli.workspace import RECORD_FILE
 
 DATA_PLACEHOLDER = "__HIMA_DATA_JSON__"
 TEMPLATE_PATH = Path(__file__).with_name("player_template.html")
@@ -24,7 +25,7 @@ def build(request: ExportRequest) -> Path:
     if not request.replay.exists():
         raise CommandError(f"replay not found: {request.replay}")
     logs_dir = request.logs_dir or request.replay.parent
-    data = export_frames(request.replay, request.sample_interval)
+    data = export_frames(request.replay, request.sample_interval, logs_dir / RECORD_FILE)
     data["decisions"] = parse_decisions(logs_dir / DECISION_LOG)
     data["commands"] = parse_commands(logs_dir / COMMAND_LOG)
     target = request.out or request.replay.parent / f"{request.replay.stem}.viewer.html"

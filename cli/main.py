@@ -5,8 +5,8 @@ from pathlib import Path
 
 from cli import experiment, metrics, patches, replay, services, viewer
 from cli.errors import CommandError
-from cli.export import DEFAULT_SAMPLE_INTERVAL
 from cli.services import DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
+from cli.web.records import DEFAULT_SAMPLE_INTERVAL
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
 DIFFICULTIES = (
