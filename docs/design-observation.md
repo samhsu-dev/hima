@@ -29,7 +29,7 @@ One JSON object per line in `frames.jsonl`, discriminated by `k`:
 
 | `k` | Fields | Meaning |
 |-----|--------|---------|
-| `meta` | `map`, `playable` | Emitted once at first sample |
+| `meta` | `map`, `playable`, `neutral` | Emitted once at first sample |
 | `type` | `name`, `r`, `s` | Type registry entry; index = order of appearance |
 | `frame` | `t`, `m`, `g`, `su`, `sc`, `u` | One frame record (fields as in `design-cli.md`) |
 | `end` | `result` | Emitted when the game ends |
