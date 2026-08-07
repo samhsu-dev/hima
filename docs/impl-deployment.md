@@ -47,7 +47,26 @@
   Season 3 — Ancient Cistern LE (2023) is not in them.
 - Map source: the retail install's `/Applications/StarCraft II/Maps/Ancient Cistern
   LE.SC2Map`, copied into the image's `Maps/`. Compatibility of a 2023 map with the
-  4.10 client is unverified until the first containerized game runs.
+  4.10 client is still unverified: the first containerized run crashed in SC2
+  startup, before map load (see Rosetta incompatibility below).
+- SC2 4.10 under OrbStack's Rosetta amd64 emulation crashes at startup: after
+  "Creating stub renderer..." it prints "unable to parse listen address." /
+  "Failed to initialize port" and dies with signal 11. Reproduced with single-
+  and double-dash arg forms, `-listen 127.0.0.1|0.0.0.0|localhost`, and on both
+  Debian trixie and Ubuntu 18.04 userlands — glibc version is not the cause.
+  `getaddrinfo`/`bind` from Python succeed in the same Rosetta container.
+- The same binary and args under qemu-user TCG (arm64 container, `qemu-x86_64
+  -L <amd64 rootfs>`) starts fully: "Listening on: 127.0.0.1:5000", "Startup
+  Phase 3 complete". The crash is a Rosetta emulation defect, not an SC2 or
+  image defect.
+- qemu-user caveats: launching via `ld-2.27.so <binary>` breaks SC2's install-root
+  discovery (`/proc/self/exe` points at the loader — "Failed to find .build.info");
+  exec the binary directly with `-L`. An `-L` prefix must not contain absolute
+  symlinks that escape it (Ubuntu's `/lib64/ld-linux-x86-64.so.2` does; replace
+  with a copy).
+- Containerized game on Apple silicon therefore requires either an amd64 host or
+  an arm64 game image that execs only `SC2_x64` through qemu-user — a
+  `design-deployment.md` revision pending user confirmation.
 
 ## Developer instructions
 
