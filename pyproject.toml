@@ -25,6 +25,10 @@ explicit = true
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.14.14",
+    "mypy>=1.19.0",
+    "types-requests>=2.32",
+    "types-psutil>=7.0",
 ]
 advisor = [
     "hima-dht-game[advisor]",
@@ -33,3 +37,14 @@ advisor = [
 [tool.pytest.ini_options]
 testpaths = ["packages"]
 addopts = ["--import-mode=importlib"]
+
+[tool.ruff]
+# Matches the repository's prevailing line width; 88 would rewrap most files.
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.isort]
+# Workspace members are first-party; without this ruff sorts them as third-party.
+known-first-party = ["hima_dht_cli", "hima_dht_game", "hima_dht_records", "hima_dht_web"]
