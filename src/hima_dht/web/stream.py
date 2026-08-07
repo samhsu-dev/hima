@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from hima_dht.web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
-from hima_dht.workspace import RECORD_FILE
+from hima_dht_records import RECORD_FILE
 
 POLL_INTERVAL = 1.0
 END_KIND = "end"

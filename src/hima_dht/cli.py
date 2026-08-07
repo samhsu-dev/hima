@@ -14,7 +14,7 @@ from hima_dht import experiment, metrics, patches, replay, services, viewer
 from hima_dht.errors import CommandError
 from hima_dht.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
 from hima_dht.web import server
-from hima_dht.web.records import DEFAULT_SAMPLE_INTERVAL
+from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
 from hima_dht.workspace import RUN_ROOT
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"

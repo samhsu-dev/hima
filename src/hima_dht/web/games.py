@@ -6,8 +6,7 @@ import json
 from pathlib import Path
 
 from hima_dht.web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
-from hima_dht.web.records import fold_lines
-from hima_dht.workspace import RECORD_FILE
+from hima_dht_records import RECORD_FILE, fold_lines
 
 LIVE_GAME_ID = "live"
 END_SCAN_BYTES = 4096

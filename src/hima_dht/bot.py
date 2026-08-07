@@ -16,8 +16,8 @@ from collections import deque
 from collections import Counter
 from sc2.ids.unit_typeid import UnitTypeId
 
-from hima_dht.web.records import GameSampler
-from hima_dht.workspace import RECORD_FILE
+from hima_dht.sampler import GameSampler
+from hima_dht_records import RECORD_FILE
 
 
 class HIMA(BotAI):
