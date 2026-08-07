@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hima = "hima_dht.main:main"
+hima = "hima_dht.cli:main"
 
 [tool.uv]
 override-dependencies = [

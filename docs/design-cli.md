@@ -8,10 +8,10 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 ## Design Overview
 
 - **Classes**: `ServiceSpec`, `ServiceOptions`, `ReplayExporter`, `CommandError`
-- **Modules**: `main` (dispatch), `workspace` (paths), `services`, `patches`,
+- **Modules**: `cli` (dispatch), `workspace` (paths), `services`, `patches`,
   `experiment`, `metrics`, `replay`, `export`, `viewer`; subpackage `web/`
   (game observation — `concept-observation.md`, `design-observation.md`)
-- **Relationships**: `main` dispatches to every command module (one-way).
+- **Relationships**: `cli` dispatches to every command module (one-way).
   `viewer` uses `export` (frame data) and `web.logs` (decision and command parsing).
   `export` uses `web.records` (record file written during re-simulation).
   `experiment` uses `services` (health precheck) and `workspace`. `services`
@@ -20,10 +20,10 @@ infrastructure, no domain semantics, no non-trivial algorithm.
   use `workspace`.
 - **Abstract**: `sc2.observer_ai.ObserverAI` (implemented by `ReplayExporter`)
 - **Exceptions**: `CommandError` extends `Exception`, raised by every command module,
-  handled only in `main`
+  handled only in `cli`
 - **Dependency roles**: Data holders: `ServiceSpec`, `ServiceOptions`.
-  Orchestrator: `main.main`. Helpers: all command modules (stateless functions).
-- **Defaults**: `main` loads `.env` at the repo root on entry; argument
+  Orchestrator: `cli.main`. Helpers: all command modules (stateless functions).
+- **Defaults**: `cli` loads `.env` at the repo root on entry; argument
   defaults resolve as CLI flag > exported environment > `.env` > code default.
   The `HIMA_*` keys are shared with docker compose interpolation
   (`.env.example`). Core modules never read the environment; they receive
@@ -44,7 +44,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 ### ServiceOptions (`services`)
 - **Responsibility**: Endpoint and model selection for the managed services,
-  resolved by `main` and passed as one parameter object.
+  resolved by `cli` and passed as one parameter object.
 - **Fields**: `advisor_port: int`, `webui_port: int`, `model: str` — each
   defaulting to the owning module's constant.
 - **Methods**: none (data holder).
@@ -66,7 +66,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 ## Function Specifications
 
-Each command module exposes one public entry consumed by `main`.
+Each command module exposes one public entry consumed by `cli`.
 
 - **setup() -> None** (`patches`) — Responsibility: make a fresh checkout runnable.
   Behavior: run `uv sync`, re-apply the three site-packages source patches
@@ -121,5 +121,5 @@ Each command module exposes one public entry consumed by `main`.
 ## Exception / Error Types
 
 - `CommandError(Exception)` — raised by command modules on any user-facing failure
-  (missing file, unhealthy service, subprocess failure). `main` catches it, prints
+  (missing file, unhealthy service, subprocess failure). `cli` catches it, prints
   the message to stderr, exits 1. All other exceptions propagate with traceback.
