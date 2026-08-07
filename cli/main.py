@@ -45,14 +45,14 @@ def _add_setup(sub: "argparse._SubParsersAction") -> None:
 
 
 def _add_services(sub: "argparse._SubParsersAction") -> None:
-    start = sub.add_parser("start", help="launch advisor server and Ollama, wait until healthy")
-    start.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)
-    start.add_argument("--model", default=DEFAULT_LEADER_MODEL)
-    start.add_argument("--skip-pull", action="store_true")
-    start.set_defaults(func=lambda args: services.start(args.port, args.model, args.skip_pull))
+    up = sub.add_parser("up", help="launch advisor, Ollama, and the webui, wait until healthy")
+    up.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)
+    up.add_argument("--model", default=DEFAULT_LEADER_MODEL)
+    up.add_argument("--skip-pull", action="store_true")
+    up.set_defaults(func=lambda args: services.up(args.port, args.model, args.skip_pull))
 
-    stop = sub.add_parser("stop", help="stop services started by hima")
-    stop.set_defaults(func=lambda args: services.stop())
+    down = sub.add_parser("down", help="stop services started by hima")
+    down.set_defaults(func=lambda args: services.down())
 
     status = sub.add_parser("status", help="report service, game, and patch state")
     status.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)

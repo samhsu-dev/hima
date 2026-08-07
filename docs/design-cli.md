@@ -15,7 +15,8 @@ infrastructure, no domain semantics, no non-trivial algorithm.
   `viewer` uses `export` (frame data) and `web.logs` (decision and command parsing).
   `export` uses `web.records` (record file written during re-simulation).
   `experiment` uses `services` (health precheck) and `workspace`. `services`
-  contains `ServiceSpec`. `export` contains `ReplayExporter`. All command modules
+  contains `ServiceSpec` and uses `web.server` (webui default port and app
+  factory for the managed webui). `export` contains `ReplayExporter`. All command modules
   use `workspace`.
 - **Abstract**: `sc2.observer_ai.ObserverAI` (implemented by `ReplayExporter`)
 - **Exceptions**: `CommandError` extends `Exception`, raised by every command module,
@@ -33,7 +34,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 - **Responsibility**: Describe one managed background service.
 - **Fields**: `name: str`, `argv: list[str]`, `health_url: str`,
   `pid_file: Path`, `log_file: Path`, `process_keyword: str`.
-- **Methods**: none (data holder). `process_keyword` guards `stop`: a stored PID is
+- **Methods**: none (data holder). `process_keyword` guards `down`: a stored PID is
   killed only when its command line contains this keyword.
 
 ### ReplayExporter (`export`)
@@ -64,16 +65,18 @@ Each command module exposes one public entry consumed by `main`.
   `pysc2/bin/play.py` (replay version newer than pysc2's table),
   `s2protocol/versions/__init__.py` (`imp` module removal). Output: per-patch status.
   Errors: `CommandError` when a target file is missing.
-- **start(port, model, skip_pull) -> None** (`services`) — Behavior: launch the advisor
-  FastAPI server (`uvicorn app:app`) and `ollama serve` when not already healthy;
-  poll health endpoints a bounded number of attempts; pull the leader model when
-  absent unless `skip_pull`. Errors: `CommandError` when health is not reached
-  within the attempt bound.
-- **stop() -> None** (`services`) — Behavior: terminate PIDs recorded in pid files
-  after verifying the process command line matches `process_keyword`; never touches
-  other processes. Output: per-service status lines.
-- **status(port, model) -> None** (`services`) — Behavior: report advisor health, Ollama
-  health, leader model presence, SC2 installation path, and patch state.
+- **up(port, model, skip_pull) -> None** (`services`) — Behavior: ensure the managed
+  services in dependency order — `ollama serve`, the leader model (pulled when
+  absent unless `skip_pull`), the advisor FastAPI server (`uvicorn app:app`), the
+  observation webui (`uvicorn --factory` on `web.server`) — skipping any service
+  already healthy; poll health endpoints a bounded number of attempts.
+  Errors: `CommandError` when health is not reached within the attempt bound.
+- **down() -> None** (`services`) — Behavior: terminate PIDs recorded in pid files in
+  reverse launch order (webui, advisor, ollama) after verifying the process command
+  line matches `process_keyword`; never touches other processes. Output: per-service
+  status lines.
+- **status(port, model) -> None** (`services`) — Behavior: report advisor health, webui
+  health, Ollama health, leader model presence, SC2 installation path, and patch state.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
   Behavior: precheck services, invoke `main.py` with `--num_server 1` (keeps the
   advisor port independent of `--seed`), stream its output, then archive

@@ -35,12 +35,12 @@ def run(options: RunOptions) -> None:
 def _require_services(options: RunOptions) -> None:
     if not services.advisor_healthy(options.advisor_host, options.port):
         raise CommandError(
-            f"advisor server not healthy at {options.advisor_host}:{options.port} — run `hima start`")
+            f"advisor server not healthy at {options.advisor_host}:{options.port} — run `hima up`")
     root = _leader_root(options.base_url)
     if not services.ollama_healthy(root):
-        raise CommandError(f"ollama not healthy at {root} — run `hima start`")
+        raise CommandError(f"ollama not healthy at {root} — run `hima up`")
     if not services.leader_model_present(root, options.model):
-        raise CommandError(f"leader model {options.model} absent — run `hima start`")
+        raise CommandError(f"leader model {options.model} absent — run `hima up`")
 
 
 def _leader_root(base_url: str) -> str:

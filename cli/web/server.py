@@ -45,9 +45,14 @@ def create_app(store: GameStore) -> FastAPI:
     return app
 
 
+def create_default_app() -> FastAPI:
+    """Build the app over the workspace layout; `hima up`'s uvicorn factory target."""
+    return create_app(GameStore(RUNS_DIR, TMP_DIR))
+
+
 def serve(host: str, port: int) -> None:
     """Serve games from the workspace layout; CommandError when the port is bound."""
-    app = create_app(GameStore(RUNS_DIR, TMP_DIR))
+    app = create_default_app()
     try:
         uvicorn.run(app, host=host, port=port)
     except SystemExit as error:

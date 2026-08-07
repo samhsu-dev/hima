@@ -1,4 +1,4 @@
-"""Managed background services: the advisor FastAPI server and Ollama."""
+"""Managed background services: advisor server, Ollama, and the webui."""
 import subprocess
 import sys
 import time
@@ -10,6 +10,7 @@ import requests
 
 from cli import patches
 from cli.errors import CommandError
+from cli.web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 from cli.workspace import REPO_ROOT, SC2_APP, SERVICE_DIR
 
 OLLAMA_URL = "http://localhost:11434"
@@ -38,6 +39,18 @@ def advisor_spec(port: int) -> ServiceSpec:
         health_url=_advisor_health_url("127.0.0.1", port),
         pid_file=SERVICE_DIR / "advisor.pid",
         log_file=SERVICE_DIR / "advisor.log",
+        process_keyword="uvicorn",
+    )
+
+
+def webui_spec(port: int) -> ServiceSpec:
+    return ServiceSpec(
+        name="webui",
+        argv=[sys.executable, "-m", "uvicorn", "--factory", "cli.web.server:create_default_app",
+              "--host", "127.0.0.1", "--port", str(port)],
+        health_url=f"http://127.0.0.1:{port}/api/games",
+        pid_file=SERVICE_DIR / "webui.pid",
+        log_file=SERVICE_DIR / "webui.log",
         process_keyword="uvicorn",
     )
 
@@ -75,15 +88,16 @@ def _advisor_health_url(host: str, port: int) -> str:
     return f"http://{host}:{port}/health"
 
 
-def start(port: int, model: str, skip_pull: bool) -> None:
+def up(port: int, model: str, skip_pull: bool) -> None:
     _ensure_service(ollama_spec())
     _ensure_leader_model(model, skip_pull)
     _ensure_service(advisor_spec(port))
+    _ensure_service(webui_spec(DEFAULT_WEBUI_PORT))
     print("all services healthy")
 
 
-def stop() -> None:
-    for spec in (advisor_spec(DEFAULT_ADVISOR_PORT), ollama_spec()):
+def down() -> None:
+    for spec in (webui_spec(DEFAULT_WEBUI_PORT), advisor_spec(DEFAULT_ADVISOR_PORT), ollama_spec()):
         print(_stop_one(spec))
 
 
@@ -95,8 +109,10 @@ def status(port: int, model: str) -> None:
 
 def _collect_checks(port: int, model: str) -> list[tuple[str, bool, str]]:
     advisor = advisor_spec(port)
+    webui = webui_spec(DEFAULT_WEBUI_PORT)
     checks = [
         ("advisor server", _healthy(advisor.health_url), advisor.health_url),
+        ("webui server", _healthy(webui.health_url), webui.health_url),
         ("ollama server", ollama_healthy(OLLAMA_URL), OLLAMA_URL),
         (f"leader model {model}", leader_model_present(OLLAMA_URL, model), "ollama tags"),
         ("SC2 installation", SC2_APP.exists(), str(SC2_APP)),

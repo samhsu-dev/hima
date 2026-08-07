@@ -90,6 +90,9 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
   server-sent events). The observation page is `player_template.html` with the
   payload injected server-side — the same injection the standalone export uses.
   Errors: `CommandError` when the port is bound.
+- **create_default_app() -> FastAPI** (`server`) — Behavior: build the app over the
+  workspace layout (`GameStore(RUNS_DIR, TMP_DIR)`); the `uvicorn --factory` target
+  for the webui managed by `hima up` (`design-cli.md`). Errors: none.
 - **stream events** — the live endpoint tails `tmp/frames.jsonl`, `output.txt`, and
   `command.txt`, emitting each new record with its kind (`frame`/`type`/`decision`/
   `command`/`end`); a client joining mid-game gets the payload from `/games/live`

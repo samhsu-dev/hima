@@ -13,6 +13,8 @@ Test cases:
   maps FileNotFoundError to HTTP 409 with a detail naming `hima export`.
 - test_serve_bound_port_raises_command_error: serving on a bound port raises
   CommandError instead of exiting the process.
+- test_create_default_app_exposes_api_games_route: the uvicorn factory target
+  builds the observation app over the workspace layout.
 - test_live_stream_replays_finished_game: /api/live/stream on a finished tmp
   record file returns every record as SSE events and closes.
 - test_live_stream_resumes_from_query_offsets: records/decisions/commands
@@ -29,7 +31,7 @@ from fastapi.testclient import TestClient
 
 from cli.errors import CommandError
 from cli.web.games import GameStore
-from cli.web.server import create_app, serve
+from cli.web.server import create_app, create_default_app, serve
 
 META_LINE = '{"k":"meta","map":"TestMap","playable":[2,2,100,120],"neutral":[]}'
 FRAME_LINE = '{"k":"frame","t":9.5,"m":50,"g":0,"su":12,"sc":15,"u":[]}'
@@ -170,3 +172,11 @@ def test_serve_bound_port_raises_command_error() -> None:
 
         with pytest.raises(CommandError):
             serve("127.0.0.1", port)
+
+
+def test_create_default_app_exposes_api_games_route() -> None:
+    app = create_default_app()
+
+    paths = {route.path for route in app.routes}
+
+    assert "/api/games" in paths
