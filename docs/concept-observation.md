@@ -1,4 +1,4 @@
-# Concept — Game Observation (`cli/web/`)
+# Concept — Game Observation (`src/cli/web/`)
 
 ## 1. Context
 

@@ -1,4 +1,4 @@
-# Design — HIMA Operations CLI (`cli/`)
+# Design — HIMA Operations CLI (`src/cli/`)
 
 Command interface wrapping the project's internal behaviors: model services, experiment
 runs, metric aggregation, replay playback, and replay-to-HTML export. Installed as the

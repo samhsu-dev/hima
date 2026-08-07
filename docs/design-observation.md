@@ -1,4 +1,4 @@
-# Design — Game Observation (`cli/web/`)
+# Design — Game Observation (`src/cli/web/`)
 
 Concepts and terminology: `concept-observation.md`. Phases Model and Spec are skipped: pure
 infrastructure over an already-confirmed record vocabulary, no non-trivial algorithm
@@ -21,7 +21,7 @@ infrastructure over an already-confirmed record vocabulary, no non-trivial algor
 - **Dependency roles**: Data holders: record dicts (schema below), `StreamCursor`
   (one client's stream progress: record byte offset, decision and command entry
   counts). Orchestrator: `server`. Helpers: `records`, `logs`, `games`, `stream`.
-- **Assets**: `cli/player_template.html` gains a live-mode section: when the injected
+- **Assets**: `src/cli/player_template.html` gains a live-mode section: when the injected
   payload carries `live: true`, the page subscribes to the record stream and appends
   incoming records; all rendering code is shared with replay mode.
 
@@ -99,14 +99,14 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
   first, then resumes via query parameters: `records` (the payload's `stream.records`
   byte offset) plus `decisions` and `commands` (its entry counts).
 
-## Integration Changes (outside `cli/web/`)
+## Integration Changes (outside `src/cli/web/`)
 
 - `bot.py` — instantiate `GameSampler(save_path/frames.jsonl)` in `on_start`, call
   `step` in `on_step`, `finish` in `on_end`. Sampling adds no model or network calls.
-- `cli/export.py` — `ReplayExporter` drives a `GameSampler` writing `frames.jsonl`
+- `src/cli/export.py` — `ReplayExporter` drives a `GameSampler` writing `frames.jsonl`
   beside the replay's logs, then folds it; the exported page is unchanged.
-- `cli/workspace.py` — `frames.jsonl` joins `GAME_OUTPUTS` so `hima run` archives it.
-- `cli/main.py` — new `serve` subcommand (`--host`, `--port`).
+- `src/cli/workspace.py` — `frames.jsonl` joins `GAME_OUTPUTS` so `hima run` archives it.
+- `src/cli/main.py` — new `serve` subcommand (`--host`, `--port`).
 
 ## Exception / Error Types
 

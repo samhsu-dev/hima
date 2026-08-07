@@ -1,7 +1,8 @@
 """Filesystem layout shared by every hima command."""
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# src layout: workspace.py sits at src/cli/, two levels below the repo root.
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 TMP_DIR = REPO_ROOT / "tmp"
 RUNS_DIR = REPO_ROOT / "runs"
 SERVICE_DIR = TMP_DIR / "services"

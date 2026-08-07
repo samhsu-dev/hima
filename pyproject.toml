@@ -52,7 +52,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["cli"]
+packages = ["src/cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
