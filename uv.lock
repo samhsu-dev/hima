@@ -13,6 +13,7 @@ resolution-markers = [
 [manifest]
 members = [
     "hima-dht",
+    "hima-dht-advisor",
     "hima-dht-game",
     "hima-dht-records",
 ]
@@ -636,6 +637,7 @@ dependencies = [
     { name = "accelerate" },
     { name = "burnysc2" },
     { name = "fastapi" },
+    { name = "hima-dht-advisor" },
     { name = "hima-dht-game" },
     { name = "hima-dht-records" },
     { name = "mpyq" },
@@ -665,6 +667,7 @@ requires-dist = [
     { name = "accelerate", specifier = "==1.14.0" },
     { name = "burnysc2", specifier = "==7.3.0" },
     { name = "fastapi", specifier = "==0.141.1" },
+    { name = "hima-dht-advisor", editable = "packages/hima-dht-advisor" },
     { name = "hima-dht-game", editable = "packages/hima-dht-game" },
     { name = "hima-dht-records", editable = "packages/hima-dht-records" },
     { name = "mpyq", specifier = "==0.2.5" },
@@ -686,6 +689,31 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+
+[[package]]
+name = "hima-dht-advisor"
+version = "0.1.0"
+source = { editable = "packages/hima-dht-advisor" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "transformers" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", specifier = "==1.14.0" },
+    { name = "fastapi", specifier = "==0.141.1" },
+    { name = "pydantic", specifier = "==2.13.4" },
+    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.13.0" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "transformers", specifier = "==5.14.1" },
+    { name = "uvicorn", specifier = "==0.52.1" },
+]
 
 [[package]]
 name = "hima-dht-game"

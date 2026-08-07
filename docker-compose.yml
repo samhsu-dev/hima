@@ -22,7 +22,7 @@ services:
       context: .
       dockerfile: docker/hima.Dockerfile
     image: hima
-    command: uvicorn hima_dht.app:app --host 0.0.0.0 --port 8090
+    command: uvicorn --factory hima_dht_advisor.server:create_default_app --host 0.0.0.0 --port 8090
     environment:
       HF_HOME: /models
     ports:

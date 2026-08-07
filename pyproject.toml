@@ -23,6 +23,7 @@ dependencies = [
     "python-dotenv==1.2.2",
     "hima-dht-records",
     "hima-dht-game",
+    "hima-dht-advisor",
 ]
 
 [project.scripts]
@@ -42,6 +43,7 @@ override-dependencies = [
 [tool.uv.sources]
 hima-dht-records = { workspace = true }
 hima-dht-game = { workspace = true }
+hima-dht-advisor = { workspace = true }
 # Linux images run the advisor on CPU; macOS keeps the PyPI MPS wheel.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
@@ -64,3 +66,4 @@ packages = ["src/hima_dht"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages"]
+addopts = ["--import-mode=importlib"]
