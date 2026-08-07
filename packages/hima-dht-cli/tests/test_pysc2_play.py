@@ -8,6 +8,7 @@ Test cases:
 - test_version_tolerant_get_falls_back_on_unknown_version: a version
   missing from the table falls back to the no-version default lookup.
 """
+
 from hima_dht_cli.pysc2_play import fixed_shuffle, version_tolerant_get
 
 

@@ -1,4 +1,5 @@
 """Aggregate metric.json across archived runs into one table."""
+
 import json
 from pathlib import Path
 

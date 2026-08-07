@@ -4,6 +4,7 @@ burnysc2 7.3.0 `run_replay()` accepts `observed_id` but never forwards it to
 `_play_replay`, which then resolves Race.NoRace and crashes; the replay is
 hosted directly here with an explicit player id.
 """
+
 import asyncio
 from pathlib import Path
 
@@ -63,8 +64,12 @@ def export_frames(replay_path: Path, sample_interval: int, record_path: Path) ->
 def _page_data(payload: dict, replay_name: str) -> dict:
     duration = payload["frames"][-1]["t"] if payload["frames"] else 0.0
     return {
-        "meta": {**payload["meta"], "replay": replay_name,
-                 "result": payload["result"], "duration": duration},
+        "meta": {
+            **payload["meta"],
+            "replay": replay_name,
+            "result": payload["result"],
+            "duration": duration,
+        },
         "types": payload["types"],
         "type_meta": payload["type_meta"],
         "neutral": payload["neutral"],
@@ -74,7 +79,9 @@ def _page_data(payload: dict, replay_name: str) -> dict:
 
 async def _host(replay_path: Path, exporter: ReplayExporter):
     base_build, data_version = get_replay_version(str(replay_path))
-    async with SC2Process(fullscreen=False, base_build=base_build, data_hash=data_version) as server:
+    async with SC2Process(
+        fullscreen=False, base_build=base_build, data_hash=data_version
+    ) as server:
         client = await _setup_replay(server, str(replay_path), False, OBSERVED_PLAYER_ID)
         return await _play_replay(client, exporter, False, player_id=OBSERVED_PLAYER_ID)
 

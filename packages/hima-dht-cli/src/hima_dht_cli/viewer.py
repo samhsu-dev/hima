@@ -1,4 +1,5 @@
 """Build and open the standalone replay viewer HTML."""
+
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
