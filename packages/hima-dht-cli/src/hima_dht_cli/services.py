@@ -1,5 +1,6 @@
 """Managed background services: advisor server, Ollama, and the webui."""
 
+import logging
 import subprocess
 import sys
 import time
@@ -12,6 +13,8 @@ import requests
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ADVISOR_HOST = "localhost"
@@ -144,7 +147,7 @@ def down() -> None:
         advisor_spec(DEFAULT_ADVISOR_PORT),
         ollama_spec(),
     ):
-        print(_stop_one(spec))
+        _stop_one(spec)
 
 
 def status(options: ServiceOptions) -> None:
@@ -180,11 +183,10 @@ def _healthy(url: str) -> bool:
 
 def _ensure_service(spec: ServiceSpec) -> None:
     if _healthy(spec.health_url):
-        print(f"{spec.name}: already healthy")
+        logger.info("service already healthy: service=%s url=%s", spec.name, spec.health_url)
         return
     _launch(spec)
     _wait_healthy(spec)
-    print(f"{spec.name}: started (log: {spec.log_file})")
 
 
 def _launch(spec: ServiceSpec) -> None:
@@ -201,11 +203,19 @@ def _launch(spec: ServiceSpec) -> None:
     except FileNotFoundError as error:
         raise CommandError(f"{spec.name}: executable not found: {spec.argv[0]}") from error
     spec.pid_file.write_text(str(process.pid), encoding="utf-8")
+    logger.info("service launched: service=%s pid=%d log=%s", spec.name, process.pid, spec.log_file)
 
 
 def _wait_healthy(spec: ServiceSpec) -> None:
-    for _ in range(HEALTH_ATTEMPTS):
+    started = time.monotonic()
+    for attempt in range(1, HEALTH_ATTEMPTS + 1):
         if _healthy(spec.health_url):
+            logger.info(
+                "service healthy: service=%s attempts=%d duration_s=%.0f",
+                spec.name,
+                attempt,
+                time.monotonic() - started,
+            )
             return
         time.sleep(HEALTH_INTERVAL_S)
     raise CommandError(
@@ -216,28 +226,40 @@ def _wait_healthy(spec: ServiceSpec) -> None:
 
 def _ensure_leader_model(model: str, skip_pull: bool) -> None:
     if leader_model_present(OLLAMA_URL, model):
+        logger.debug("leader model present: model=%s", model)
         return
     if skip_pull:
         raise CommandError(f"leader model {model} absent; run `ollama pull {model}`")
-    print(f"pulling leader model {model} ...")
+    # Start record at INFO: the pull downloads gigabytes and can stall.
+    logger.info("leader model pull starting: model=%s", model)
+    started = time.monotonic()
     completed = subprocess.run(["ollama", "pull", model])
+    logger.info(
+        "leader model pull exited: model=%s exit_code=%d duration_s=%.0f",
+        model,
+        completed.returncode,
+        time.monotonic() - started,
+    )
     if completed.returncode != 0:
         raise CommandError(f"ollama pull {model} failed with code {completed.returncode}")
 
 
-def _stop_one(spec: ServiceSpec) -> str:
+def _stop_one(spec: ServiceSpec) -> None:
     if not spec.pid_file.exists():
-        return f"{spec.name}: no pid file — not started by hima"
+        logger.info("service stop skipped: service=%s reason=no_pid_file", spec.name)
+        return
     pid = int(spec.pid_file.read_text(encoding="utf-8").strip())
     try:
         process = psutil.Process(pid)
         cmdline = " ".join(process.cmdline())
     except psutil.NoSuchProcess:
         spec.pid_file.unlink()
-        return f"{spec.name}: already exited"
+        logger.info("service already exited: service=%s pid=%d", spec.name, pid)
+        return
     if spec.process_keyword not in cmdline:
-        return f"{spec.name}: pid {pid} now belongs to another process — skipped"
+        logger.warning("service stop skipped: service=%s pid=%d reason=pid_reused", spec.name, pid)
+        return
     process.terminate()
     process.wait(timeout=STOP_WAIT_S)
     spec.pid_file.unlink()
-    return f"{spec.name}: stopped (pid {pid})"
+    logger.info("service stopped: service=%s pid=%d", spec.name, pid)

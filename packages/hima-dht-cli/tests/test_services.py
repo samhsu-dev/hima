@@ -12,7 +12,17 @@ Test cases:
   {base_url}/models with the bearer key and returns the served ids.
 - test_leader_models_none_when_unreachable: a request failure yields None,
   distinct from an empty served list.
+- test_wait_healthy_logs_service_and_attempts: reaching health emits one
+  record carrying the service name and the attempt count.
+- test_ensure_leader_model_logs_pull_exit: a pull emits an exit record
+  carrying the model and the exit code.
+- test_stop_one_logs_skip_without_pid_file: stopping a service that hima
+  never started emits a skip record instead of touching any process.
 """
+
+import logging
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import requests
@@ -56,9 +66,8 @@ def test_up_ensures_services_in_dependency_order(
 def test_down_stops_services_in_reverse_order(monkeypatch: pytest.MonkeyPatch) -> None:
     stopped: list[str] = []
 
-    def fake_stop_one(spec: services.ServiceSpec) -> str:
+    def fake_stop_one(spec: services.ServiceSpec) -> None:
         stopped.append(spec.name)
-        return f"{spec.name}: stopped"
 
     monkeypatch.setattr(services, "_stop_one", fake_stop_one)
     services.down()
@@ -96,3 +105,55 @@ def test_leader_models_none_when_unreachable(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(services.requests, "get", fake_get)
 
     assert services.leader_models("http://localhost:11434/v1", "ollama") is None
+
+
+def test_wait_healthy_logs_service_and_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(services, "_healthy", lambda url: True)
+
+    with caplog.at_level(logging.INFO, logger="hima_dht_cli.services"):
+        services._wait_healthy(services.advisor_spec(8090))
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        message.startswith("service healthy: service=advisor attempts=1") for message in messages
+    )
+
+
+def test_ensure_leader_model_logs_pull_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(services, "leader_model_present", lambda root, model: False)
+    monkeypatch.setattr(services.subprocess, "run", lambda argv: SimpleNamespace(returncode=0))
+
+    with caplog.at_level(logging.INFO, logger="hima_dht_cli.services"):
+        services._ensure_leader_model("qwen3:8b", skip_pull=False)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        message.startswith("leader model pull exited: model=qwen3:8b exit_code=0")
+        for message in messages
+    )
+
+
+def test_stop_one_logs_skip_without_pid_file(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    spec = services.ServiceSpec(
+        name="advisor",
+        argv=["true"],
+        health_url="http://127.0.0.1:8090/health",
+        pid_file=tmp_path / "advisor.pid",
+        log_file=tmp_path / "advisor.log",
+        process_keyword="uvicorn",
+    )
+
+    with caplog.at_level(logging.INFO, logger="hima_dht_cli.services"):
+        services._stop_one(spec)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages == ["service stop skipped: service=advisor reason=no_pid_file"]

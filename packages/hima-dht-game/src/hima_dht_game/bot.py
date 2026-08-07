@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import time
@@ -18,6 +19,11 @@ from sc2.ids.unit_typeid import UnitTypeId
 
 from hima_dht_game.sampler import GameSampler
 from hima_dht_records import RECORD_FILE
+
+logger = logging.getLogger(__name__)
+
+# Upstream HIMA's fixed pause before retrying a failed leader call.
+LEADER_RETRY_DELAY_S = 7
 
 
 class HIMA(BotAI):
@@ -305,8 +311,11 @@ class HIMA(BotAI):
             {"role": "user", "content": user_input}
         ]
 
+        started = time.monotonic()
+        attempts = 0
         while True:
             try:
+                attempts += 1
                 output = self.leader.chat.completions.create(
                     model=self.args.LLM_api_text,
                     temperature=self.args.temperature,
@@ -315,8 +324,16 @@ class HIMA(BotAI):
                 response = output.choices[0].message.content
                 break
             except Exception as e:
-                print(e)
-                time.sleep(7)
+                logger.warning(
+                    "leader call failed, retrying in %ss: leader=%s model=%s error=%s: %s",
+                    LEADER_RETRY_DELAY_S, self.args.LLM_base_url, self.args.LLM_api_text,
+                    type(e).__name__, e,
+                )
+                time.sleep(LEADER_RETRY_DELAY_S)
+        logger.info(
+            "leader call: model=%s duration_s=%.1f attempts=%d",
+            self.args.LLM_api_text, time.monotonic() - started, attempts,
+        )
 
         utils.save_data_to_file(f"{self.time_formatted}\n{response.strip()}", os.path.join(self.game_folder, "output.txt"))
         # reasoning models emit <think> blocks whose rehearsed text can confuse action extraction
@@ -328,8 +345,14 @@ class HIMA(BotAI):
             "prompt": json.dumps(query_input),
             "temperature": self.args.temperature
         }
-        r = requests.post(f"http://{self.args.advisor_host}:{self.server}/infer", json=user_input)
+        advisor_url = f"http://{self.args.advisor_host}:{self.server}/infer"
+        started = time.monotonic()
+        r = requests.post(advisor_url, json=user_input)
         r.raise_for_status()
+        logger.info(
+            "advisor call: url=%s duration_s=%.1f status=%d",
+            advisor_url, time.monotonic() - started, r.status_code,
+        )
         query_input = self.generate_input(observation, actions=r.json()["text"])
         command = self.leader_inference(query_input)
         return command
@@ -374,9 +397,29 @@ class HIMA(BotAI):
         self.next_scout, self.next_refresh, self.next_inference, self.next_combat, self.agent_call = 4000, 9999, 0, 0, 0
         self.apu, self.successful_actions, self.gas_list, self.units_before = [], [], [], []
         self.sampler = GameSampler(Path(self.game_folder) / RECORD_FILE)
+        self.progress_minute = -1
+        logger.info(
+            "game started: start_position=%s advisor=%s:%d leader=%s model=%s",
+            self.start_position, self.args.advisor_host, self.server,
+            self.args.LLM_base_url, self.args.LLM_api_text,
+        )
+
+    def log_progress(self, iteration):
+        # One record per game minute leaves a last-known-state trail when
+        # the game dies without reaching on_end.
+        minute = int(self.time // 60)
+        if minute <= self.progress_minute:
+            return
+        self.progress_minute = minute
+        logger.info(
+            "game progress: game_time=%s iteration=%d supply=%d/%d minerals=%d elapsed_s=%d",
+            self.time_formatted, iteration, self.supply_used, self.supply_cap,
+            self.minerals, int(time.time() - self.current_time),
+        )
 
     async def on_step(self, iteration):
         self.sampler.step(self, iteration)
+        self.log_progress(iteration)
         if not self.townhalls:
             return
         self.iteration = iteration
@@ -416,6 +459,11 @@ class HIMA(BotAI):
         self.save_metric()
 
     async def on_end(self, game_result):
+        logger.info(
+            "game ended: result=%s game_time=%s agent_call=%d elapsed_s=%d",
+            game_result.name, self.time_formatted, self.agent_call,
+            int(time.time() - self.current_time),
+        )
         observation = self.get_information()
         if not hasattr(self, "rur"):
             self.rur = 0

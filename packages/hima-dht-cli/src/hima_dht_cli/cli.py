@@ -5,6 +5,8 @@ working directory (shared with docker compose interpolation) > code default.
 Environment lookup is declared per option via typer `envvar`.
 """
 
+import logging
+import os
 import sys
 from enum import Enum
 from pathlib import Path
@@ -40,6 +42,12 @@ ENV_WEBUI_PORT = "HIMA_WEBUI_PORT"
 ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
 ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
 ENV_LEADER_API_KEY = "HIMA_LEADER_API_KEY"
+# Also read by the game process (hima_dht_game.main), which inherits this
+# process's environment; the contract is documented in .env.example.
+ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
+
+DEFAULT_LOG_LEVEL = "INFO"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 
 class Difficulty(str, Enum):
@@ -78,6 +86,10 @@ LeaderModelOption = Annotated[str, typer.Option(envvar=ENV_LEADER_MODEL)]
 
 def main() -> int:
     load_dotenv(RUN_ROOT / ".env")
+    logging.basicConfig(
+        level=os.environ.get(ENV_LOG_LEVEL, DEFAULT_LOG_LEVEL),
+        format=LOG_FORMAT,
+    )
     try:
         app()
     except CommandError as error:

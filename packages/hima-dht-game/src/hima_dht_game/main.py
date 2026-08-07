@@ -1,5 +1,6 @@
 """Game entry: argument parsing and one game launch."""
 import argparse
+import logging
 import os
 from datetime import datetime
 
@@ -14,8 +15,16 @@ from hima_dht_game.bots.terran_bot import Terran_Bot
 from hima_dht_game.bots.textstarcraft import TextStarCraft
 from hima_dht_game.bots.zerg_bot import Zerg_Bot
 
+# Shared with the hima CLI process, whose environment this process
+# inherits; the contract is documented in .env.example.
+ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
+    logging.basicConfig(level=os.environ.get(ENV_LOG_LEVEL, "INFO"), format=LOG_FORMAT)
     parser = argparse.ArgumentParser(description='StarCraft II agent')
     parser.add_argument('--port', default=8080, type=int)
     parser.add_argument('--num_server', default=3, type=int)
@@ -69,12 +78,18 @@ def main() -> None:
         our_bot = Zerg_Bot(args)
     elif args.own_race == Race.Terran:
         our_bot = Terran_Bot(args)
+    logger.info(
+        "game launching: mode=%s own_race=%s enemy_race=%s difficulty=%s seed=%d realtime=%s",
+        args.mode, args.own_race.name, args.enemy_race.name, args.difficulty.name,
+        args.seed, args.realtime,
+    )
     if args.mode == 'bot':
         enemy = Computer(args.enemy_race, args.difficulty)
         result = run_game(maps.get("Ancient Cistern LE"), [Bot(args.own_race, our_bot), enemy], realtime=args.realtime, save_replay_as=temp_replay_path, random_seed=args.seed)
         result = str(result).split(".")[1]
         final_replay_path = f'{temp_replay_folder}/{args.current_time}_{args.difficulty}_{args.enemy_race}_{result}.SC2Replay'
         os.rename(temp_replay_path, final_replay_path)
+        logger.info("replay saved: result=%s replay=%s", result, final_replay_path)
     elif args.mode == 'agent':
         if args.enemy_agent == 'TextStarCraft':
             enemy = Bot(Race.Protoss, TextStarCraft(args))
@@ -83,3 +98,4 @@ def main() -> None:
         elif args.enemy_agent == 'HEP-TextStarCraft':
             enemy = Bot(Race.Protoss, TextStarCraft(args, hep=True))
         run_game(maps.get("Ancient Cistern LE"), [Bot(args.own_race, our_bot), enemy], realtime=args.realtime, save_replay_as=temp_replay_path, random_seed=args.seed)
+        logger.info("replay saved: replay=%s", temp_replay_path)

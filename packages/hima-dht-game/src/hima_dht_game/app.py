@@ -4,11 +4,15 @@ Endpoints: /health, /infer (aggregate), /infer/{model_id}. The default app
 loads its models in the application lifespan, so the server accepts requests
 only once every advisor is ready.
 """
+
 import asyncio
+import logging
 import os
+import time
+from collections.abc import AsyncIterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Mapping, Protocol
+from typing import Protocol
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -18,6 +22,11 @@ from starlette.types import Lifespan
 # fine-tuned Terran suggestion trio is the default.
 MODEL_TRIO = ("SNUMPR/Terran-a", "SNUMPR/Terran-b", "SNUMPR/Terran-c")
 ENV_ADVISOR_MODELS = "HIMA_ADVISOR_MODELS"
+# Shared with the hima CLI and game processes (.env.example).
+ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+logger = logging.getLogger(__name__)
 
 
 def model_trio() -> tuple[str, ...]:
@@ -52,14 +61,16 @@ class ModelAdvisor:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self._model = AutoModelForCausalLM.from_pretrained(
-            name, device_map="auto", trust_remote_code=True)
+            name, device_map="auto", trust_remote_code=True
+        )
         self._tokenizer = AutoTokenizer.from_pretrained(name)
         self._executor = executor
 
     async def generate(self, query: Query) -> str:
         messages = [{"role": "user", "content": query.prompt}]
         text = self._tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True)
+            messages, tokenize=False, add_generation_prompt=True
+        )
         model_inputs = self._tokenizer([text], return_tensors="pt").to(self._model.device)
         loop = asyncio.get_running_loop()
         generated_ids = await loop.run_in_executor(
@@ -72,14 +83,16 @@ class ModelAdvisor:
             ),
         )
         generated_ids = [
-            output_ids[len(input_ids):]
-            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            output_ids[len(input_ids) :]
+            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids, strict=False)
         ]
         response = self._tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
         return response.replace("\n", "")
 
 
-def create_app(advisors: Mapping[str, Advisor], lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
+def create_app(
+    advisors: Mapping[str, Advisor], lifespan: Lifespan[FastAPI] | None = None
+) -> FastAPI:
     """Build the advisor app over the given advisors.
 
     `advisors` may start empty and be filled by `lifespan`; every route
@@ -94,10 +107,11 @@ def create_app(advisors: Mapping[str, Advisor], lifespan: Lifespan[FastAPI] | No
     @app.post("/infer")
     async def infer_all(query: Query) -> dict:
         model_ids = sorted(advisors)
-        texts = await asyncio.gather(*(advisors[model_id].generate(query) for model_id in model_ids))
+        texts = await asyncio.gather(
+            *(advisors[model_id].generate(query) for model_id in model_ids)
+        )
         lines = (
-            f"Suggestion {chr(ord('A') + index)}: '{text}',\n"
-            for index, text in enumerate(texts)
+            f"Suggestion {chr(ord('A') + index)}: '{text}',\n" for index, text in enumerate(texts)
         )
         return {"text": "".join(lines)}
 
@@ -112,6 +126,9 @@ def create_app(advisors: Mapping[str, Advisor], lifespan: Lifespan[FastAPI] | No
 
 def create_default_app() -> FastAPI:
     """Build the app whose lifespan loads the configured model trio."""
+    # This factory is the composition root of the uvicorn-managed advisor
+    # process; uvicorn's own log config leaves application loggers unrouted.
+    logging.basicConfig(level=os.environ.get(ENV_LOG_LEVEL, "INFO"), format=LOG_FORMAT)
     advisors: dict[str, Advisor] = {}
 
     @asynccontextmanager
@@ -120,7 +137,16 @@ def create_default_app() -> FastAPI:
         # serializes model access.
         executor = ThreadPoolExecutor(max_workers=1)
         for index, name in enumerate(model_trio()):
+            # Start record at INFO: a checkpoint load takes minutes and can
+            # die on memory exhaustion before completing.
+            logger.info("advisor model loading: model=%s", name)
+            started = time.monotonic()
             advisors[str(index)] = ModelAdvisor(name, executor)
+            logger.info(
+                "advisor model loaded: model=%s duration_s=%.0f",
+                name,
+                time.monotonic() - started,
+            )
         yield
         executor.shutdown()
 

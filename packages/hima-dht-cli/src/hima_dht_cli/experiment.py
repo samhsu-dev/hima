@@ -1,15 +1,19 @@
 """Run one experiment game and archive its outputs under runs/."""
 
 import json
+import logging
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from hima_dht_cli import services
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import GAME_OUTPUTS, RUN_ROOT, RUNS_DIR, TMP_DIR
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -26,12 +30,35 @@ class RunOptions:
 
 
 def run(options: RunOptions) -> None:
+    # A game runs for hours and can die silently; the start record makes a
+    # missing summary record diagnosable.
+    logger.info(
+        "run starting: difficulty=%s enemy_race=%s seed=%d advisor=%s:%d "
+        "leader=%s model=%s realtime=%s",
+        options.difficulty,
+        options.enemy_race,
+        options.seed,
+        options.advisor_host,
+        options.port,
+        options.base_url,
+        options.model,
+        options.realtime,
+    )
+    started = time.monotonic()
+    try:
+        run_dir = _play_and_archive(options)
+    except CommandError as error:
+        logger.warning("run failed: duration_s=%.0f error=%s", time.monotonic() - started, error)
+        raise
+    logger.info("run archived: run_dir=%s duration_s=%.0f", run_dir, time.monotonic() - started)
+    _print_metric(run_dir)
+
+
+def _play_and_archive(options: RunOptions) -> Path:
     _require_services(options)
     existing = set(TMP_DIR.glob("*.SC2Replay"))
     _invoke_game(options)
-    replay = _newest_replay(existing)
-    run_dir = _archive(replay)
-    _print_metric(run_dir)
+    return _archive(_newest_replay(existing))
 
 
 def _require_services(options: RunOptions) -> None:
@@ -50,6 +77,13 @@ def _require_services(options: RunOptions) -> None:
             f"leader model {options.model} not served at {options.base_url} — "
             "run `hima up` or check --model / HIMA_LEADER_MODEL"
         )
+    logger.debug(
+        "service prechecks passed: advisor=%s:%d leader=%s models=%d",
+        options.advisor_host,
+        options.port,
+        options.base_url,
+        len(served),
+    )
 
 
 def _model_served(model: str, served: list[str]) -> bool:
@@ -57,6 +91,21 @@ def _model_served(model: str, served: list[str]) -> bool:
 
 
 def _invoke_game(options: RunOptions) -> None:
+    # Start record at INFO: the subprocess can hang or die without output.
+    # The argv itself stays out of the record — it carries the API key.
+    logger.info("game subprocess starting: module=hima_dht_game")
+    started = time.monotonic()
+    completed = subprocess.run(_game_argv(options), cwd=RUN_ROOT)
+    logger.info(
+        "game subprocess exited: exit_code=%d duration_s=%.0f",
+        completed.returncode,
+        time.monotonic() - started,
+    )
+    if completed.returncode != 0:
+        raise CommandError(f"hima_dht_game exited with code {completed.returncode}")
+
+
+def _game_argv(options: RunOptions) -> list[str]:
     argv = [
         sys.executable,
         "-m",
@@ -86,9 +135,7 @@ def _invoke_game(options: RunOptions) -> None:
     ]
     if options.realtime:
         argv.append("--realtime")
-    completed = subprocess.run(argv, cwd=RUN_ROOT)
-    if completed.returncode != 0:
-        raise CommandError(f"hima_dht_game exited with code {completed.returncode}")
+    return argv
 
 
 def _newest_replay(existing: set[Path]) -> Path:

@@ -17,8 +17,16 @@ Test cases:
   leader model raises CommandError naming the model.
 - test_model_served_matches_exact_and_tag: the model check accepts exact
   ids and Ollama tag-suffixed ids, nothing else.
+- test_run_logs_start_and_summary_on_success: run() emits the start
+  record and a summary record carrying the archived run directory.
+- test_run_logs_summary_on_failure: a failed run still emits a summary
+  record carrying the error, then re-raises.
+- test_invoke_game_logs_exit_record: the game subprocess exit record
+  carries the exit code even when the run fails.
 """
 
+import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -143,3 +151,62 @@ def test_require_services_rejects_missing_model(
 )
 def test_model_served_matches_exact_and_tag(served: list[str], match: bool) -> None:
     assert experiment._model_served("qwen3:8b", served) is match
+
+
+def test_run_logs_start_and_summary_on_success(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(experiment, "_play_and_archive", lambda options: tmp_path / "run")
+    monkeypatch.setattr(experiment, "_print_metric", lambda run_dir: None)
+
+    with caplog.at_level(logging.INFO, logger="hima_dht_cli.experiment"):
+        experiment.run(make_options(DEFAULT_ADVISOR_HOST))
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(message.startswith("run starting: difficulty=Hard") for message in messages)
+    assert any(
+        message.startswith(f"run archived: run_dir={tmp_path / 'run'}") for message in messages
+    )
+
+
+def test_run_logs_summary_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def fail(options: RunOptions) -> Path:
+        raise CommandError("boom")
+
+    monkeypatch.setattr(experiment, "_play_and_archive", fail)
+
+    with (
+        caplog.at_level(logging.INFO, logger="hima_dht_cli.experiment"),
+        pytest.raises(CommandError, match="boom"),
+    ):
+        experiment.run(make_options(DEFAULT_ADVISOR_HOST))
+
+    failures = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.WARNING and record.getMessage().startswith("run failed:")
+    ]
+    assert len(failures) == 1 and "boom" in failures[0].getMessage()
+
+
+def test_invoke_game_logs_exit_record(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(
+        experiment.subprocess, "run", lambda argv, cwd: SimpleNamespace(returncode=3)
+    )
+
+    with (
+        caplog.at_level(logging.INFO, logger="hima_dht_cli.experiment"),
+        pytest.raises(CommandError, match="code 3"),
+    ):
+        experiment._invoke_game(make_options(DEFAULT_ADVISOR_HOST))
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(message.startswith("game subprocess exited: exit_code=3") for message in messages)
