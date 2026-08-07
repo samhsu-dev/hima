@@ -142,7 +142,10 @@
   qwen3:8b leader completion inside the openai client's 600 s timeout; native
   Ollama (Metal) answers the same call in 29.5 s.
 - The compose `ollama` service publishes `${HIMA_OLLAMA_PORT:-11434}` so the
-  host reaches the containerized leader (`hima up --backend docker`). The
+  host reaches the containerized leader (`hima up --backend docker`). After
+  `up -d --wait`, `hima` verifies the actual binding with `docker compose
+  port ollama 11434` and aborts on divergence naming `HIMA_OLLAMA_PORT` — a
+  `--ollama-port` flag cannot reach compose interpolation. The
   same port cannot host both backends: the manifest records which backend
   owns it, native `up` fails explicitly when the endpoint answers without an
   owned pid, and compose fails the publish with a bind error when a native

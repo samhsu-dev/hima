@@ -13,6 +13,22 @@ vendor documentation.
   verified to boot and serve `/api/games` from the workspace layout.
 - **[psutil]** `psutil.Process(pid).cmdline()` — raises `psutil.NoSuchProcess` for a
   dead PID; join to one string before keyword matching (`down` PID-reuse guard).
+- **[psutil]** `psutil.AccessDenied` — raised when the pid was reused by another
+  user's process; not a `NoSuchProcess` subclass, catch it separately.
+  `ZombieProcess` is a `NoSuchProcess` subclass. `psutil.pid_exists(pid)` is the
+  bare liveness test (`status` foreign-process check).
+- **[os]** `os.getpgid(pid) == pid` — process-group-leader test;
+  `start_new_session=True` at spawn makes the child its own group leader, and
+  `os.killpg(pid, sig)` then signals the whole group (ollama's model-runner
+  children).
+- **[fcntl]** `fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)` — raises
+  `BlockingIOError` when held; releases on close or process exit, so a crashed
+  holder never wedges the lock. Conflicts between two open file descriptions
+  even within one process (testable without a second process).
+- **[pathlib]** `Path.replace(target)` — atomic rename on the same filesystem;
+  scratch file + replace persists the manifest without torn writes.
+- **[requests]** `response.ok` — status < 400; a foreign server's 404 on the
+  health path is not health.
 - **[typer]** `typer.Typer(add_completion=False, pretty_exceptions_enable=False)` —
   default standalone mode prints concise usage errors and exits 2; a plain
   `CommandError` raised in a command propagates out of `app()` for `main()` to
@@ -30,9 +46,13 @@ vendor documentation.
   `[section.sub]` tables; round-trips with stdlib `tomllib.loads` (verified);
   `None` values are unsupported — omit absent keys instead.
 - **[docker compose]** `docker compose ps --format json` — NDJSON, one object
-  per line with `Service` and `Name` keys (verified against compose 5.1.2);
+  per line with `Service` and `Name` keys, since v2.21; earlier versions emit
+  one JSON array — parse both (verified against compose 5.1.2);
   `up -d --wait` blocks on healthchecks (services without one wait for
   running) and needs no extra timeout — healthcheck retries bound it.
+- **[docker compose]** `docker compose port ollama 11434` — prints the host
+  binding (`0.0.0.0:12345`); the authoritative published port after
+  interpolation (`up --backend docker` divergence check).
 - **[ollama]** `OLLAMA_HOST=127.0.0.1:<port>` — environment consumed by both
   `ollama serve` (bind address) and the `ollama pull` client (target server).
 

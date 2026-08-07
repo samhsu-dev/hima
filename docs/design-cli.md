@@ -91,6 +91,13 @@ infrastructure, no domain semantics, no non-trivial algorithm.
   `container: str`.
 - **Methods**: none (data holders). TOML write via `tomli-w`, read via
   `tomllib`; the manifest-level `backend` discriminates the entry type.
+  The document carries a layout `version` key (currently 1). The write is
+  atomic: a scratch file replaced over the target, so a crash mid-write
+  never leaves a torn manifest. The read raises `CommandError` on
+  unparsable TOML, on a version other than the reader's, and on a document
+  missing required keys — each message states the remediation (delete the
+  file and rerun `hima up`; `hima down` without a manifest still sweeps
+  native pid files).
 
 ### ReplayExporter (`export`)
 - **Responsibility**: Step through a replay via the SC2 engine and record sampled
@@ -121,30 +128,49 @@ Each command module exposes one public entry consumed by `cli`.
   never needs a follow-up step. s2protocol's Python 3.12 breakage is left
   alone: no code path imports it.
 - **up(options, skip_pull, manifest_out) -> None** (`services`) — Behavior:
-  dispatch on `options.backend`. `NATIVE`: ensure the services in dependency
+  serialize against every other `up`/`down` via an exclusive non-blocking
+  lock on `tmp/services/up-down.lock` (released on close or process exit —
+  a crashed holder never wedges it), then dispatch on `options.backend`.
+  `NATIVE`: ensure the services in dependency
   order — `ollama serve` (bound to `ollama_port` via `OLLAMA_HOST`), the
   leader model (host `ollama pull` when absent unless `skip_pull`), the
   advisor FastAPI server (`uvicorn --factory` on `hima_dht_game.app`), the
   observation webui (`uvicorn --factory` on `hima_dht_web.server`); each
   ensure is ownership-aware — an owned live pid (pid file + matching command
-  line) short-circuits, while an endpoint answering without an owned pid is
-  a foreign server and raises. `DOCKER`: `docker compose up -d --wait` on
-  ollama/advisor/webui, leader model presence via the published port, pull
-  via `docker compose exec ollama ollama pull`, container names from
-  `docker compose ps`. Both paths write the manifest; `manifest_out` writes
-  a copy. Errors: `CommandError` when health is not reached within the
-  attempt bound, on a foreign endpoint, on a compose failure, or when the
-  model is absent under `skip_pull`.
-- **down() -> None** (`services`) — Behavior: read the manifest; backend
+  line + process-group leader) short-circuits, while an endpoint answering
+  without an owned pid is a foreign server and raises; each launch first
+  rotates a service log grown past 10 MiB to a single `.1` backup.
+  `DOCKER`: `docker compose up -d --wait` on
+  ollama/advisor/webui, then verify the compose-published ollama port
+  equals the requested one — compose interpolation reads only exported
+  environment and `.env`, so a diverging value aborts with a
+  `HIMA_OLLAMA_PORT` remediation — leader model presence via the published
+  port, pull via `docker compose exec ollama ollama pull`, container names
+  from `docker compose ps`. Both paths write the manifest; `manifest_out`
+  writes a copy. Errors: `CommandError` when the service lock is held, when
+  health is not reached within the attempt bound, on a foreign endpoint, on
+  a compose failure or published-port divergence, or when the model is
+  absent under `skip_pull`.
+- **down() -> None** (`services`) — Behavior: serialize via the same
+  service lock as `up`, then read the manifest; backend
   `DOCKER` → `docker compose stop` of the recorded services; backend
-  `NATIVE` or no manifest → terminate PIDs recorded in pid files in
-  reverse launch order (webui, advisor, ollama) after verifying the process
-  command line matches `process_keyword`; never touches other processes.
-  Removes the manifest.
-- **status(options) -> None** (`services`) — Behavior: report the manifest
-  (backend and creation time, or its absence), then advisor health, webui
-  health, Ollama health at `ollama_port`, leader model presence, and SC2
-  installation path.
+  `NATIVE` or no manifest → stop PIDs recorded in pid files in
+  reverse launch order (webui, advisor, ollama) after verifying ownership
+  (command line matches `process_keyword` and the pid is its own
+  process-group leader); each stop signals the whole process group SIGTERM,
+  waits 10 s, escalates to SIGKILL, waits 5 s more; never touches other
+  processes. Removes the manifest. Errors: `CommandError` when the service
+  lock is held or a process survives SIGKILL.
+- **status(options) -> bool** (`services`) — Behavior: report the manifest
+  (backend and creation time, or its absence), then one check per recorded
+  service: probe the recorded endpoint at its health path (one probe-path
+  table in `_health`, shared with the service specs); a native entry
+  additionally requires the recorded pid alive — a reachable endpoint whose
+  recorded pid is gone fails as a foreign process; then leader model
+  presence at the recorded Ollama endpoint and the SC2 installation path.
+  Without a manifest, checks fall back to option-derived endpoints. Output:
+  `True` when every check passes; `cli` exits 1 otherwise. Errors:
+  `CommandError` on a corrupt or version-mismatched manifest.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
   Behavior: precheck the advisor health endpoint and the leader endpoint's
   OpenAI-compatible model list (`GET {base_url}/models` with the bearer key —
@@ -186,5 +212,7 @@ Each command module exposes one public entry consumed by `cli`.
 - `CommandError(Exception)` — raised by command modules on any user-facing failure
   (missing file, unhealthy service, subprocess failure, a service endpoint
   answered by a process hima does not own, a failed `docker compose`
-  invocation, a corrupt manifest). `cli` catches it, prints
+  invocation, a corrupt or version-mismatched manifest, a held service
+  lock, a compose-published port diverging from the requested one, a
+  process surviving SIGKILL). `cli` catches it, prints
   the message to stderr, exits 1. All other exceptions propagate with traceback.
