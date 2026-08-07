@@ -9,6 +9,8 @@ Test cases:
   {base_url}/models with the bearer key and returns the served ids.
 - test_leader_models_none_when_unreachable: a request failure yields None,
   distinct from an empty served list.
+- test_model_served_matches_exact_and_tag: the model check accepts exact
+  ids and Ollama tag-suffixed ids, nothing else.
 """
 
 import pytest
@@ -77,3 +79,17 @@ def test_leader_models_none_when_unreachable(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr("hima_dht_cli.services._health.requests.get", fake_get)
 
     assert services.leader_models("http://localhost:11434/v1", "ollama") is None
+
+
+@pytest.mark.parametrize(
+    "served,match",
+    [
+        (["qwen3:8b"], True),  # exact id
+        (["qwen3:8b:q4"], True),  # Ollama tag suffix on the requested id
+        (["qwen3"], False),  # bare family is not the requested tag
+        (["llama3:8b"], False),  # different model
+        ([], False),  # empty served list
+    ],
+)
+def test_model_served_matches_exact_and_tag(served: list[str], match: bool) -> None:
+    assert services.model_served("qwen3:8b", served) is match

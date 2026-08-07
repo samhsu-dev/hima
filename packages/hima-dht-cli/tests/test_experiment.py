@@ -15,8 +15,6 @@ Test cases:
   endpoint raises CommandError naming the base URL.
 - test_require_services_rejects_missing_model: a served list without the
   leader model raises CommandError naming the model.
-- test_model_served_matches_exact_and_tag: the model check accepts exact
-  ids and Ollama tag-suffixed ids, nothing else.
 - test_run_logs_start_and_summary_on_success: run() emits the start
   record and a summary record carrying the archived run directory.
 - test_run_logs_summary_on_failure: a failed run still emits a summary
@@ -137,20 +135,6 @@ def test_require_services_rejects_missing_model(
 
     with pytest.raises(CommandError, match="qwen3:8b"):
         experiment._require_services(make_options(DEFAULT_ADVISOR_HOST))
-
-
-@pytest.mark.parametrize(
-    "served,match",
-    [
-        (["qwen3:8b"], True),  # exact id
-        (["qwen3:8b:q4"], True),  # Ollama tag suffix on the requested id
-        (["qwen3"], False),  # bare family is not the requested tag
-        (["llama3:8b"], False),  # different model
-        ([], False),  # empty served list
-    ],
-)
-def test_model_served_matches_exact_and_tag(served: list[str], match: bool) -> None:
-    assert experiment._model_served("qwen3:8b", served) is match
 
 
 def test_run_logs_start_and_summary_on_success(

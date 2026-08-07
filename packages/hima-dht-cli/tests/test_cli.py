@@ -9,6 +9,8 @@ Test cases:
   and model defaults from HIMA_* variables.
 - test_up_backend_reads_environment: `hima up` takes its backend default
   from HIMA_SERVICE_BACKEND.
+- test_up_leader_endpoint_reads_environment: `hima up` takes the leader
+  base URL and API key defaults from HIMA_LEADER_* variables.
 - test_flag_overrides_environment: an explicit --port beats
   HIMA_ADVISOR_PORT.
 - test_run_defaults_read_environment: `hima run` takes advisor host and
@@ -65,6 +67,23 @@ def test_up_backend_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert captured["options"].backend is services.ServiceBackend.DOCKER
+
+
+def test_up_leader_endpoint_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HIMA_LEADER_BASE_URL", "https://api.example.com/v1")
+    monkeypatch.setenv("HIMA_LEADER_API_KEY", "secret")
+    captured: dict[str, services.ServiceOptions] = {}
+    monkeypatch.setattr(
+        services, "up", lambda options, skip_pull, manifest_out: captured.update(options=options)
+    )
+
+    result = runner.invoke(cli.app, ["up"])
+
+    assert result.exit_code == 0
+    assert (captured["options"].leader_base_url, captured["options"].leader_api_key) == (
+        "https://api.example.com/v1",
+        "secret",
+    )
 
 
 def test_flag_overrides_environment(monkeypatch: pytest.MonkeyPatch) -> None:

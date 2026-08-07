@@ -19,6 +19,22 @@ COMPOSE_SERVICES = ("ollama", "advisor", "webui")
 # Container-side ollama port, fixed by docker-compose.yml.
 CONTAINER_OLLAMA_PORT = 11434
 
+# Image tag of the containerized game, fixed by docker-compose.yml.
+GAME_IMAGE = "hima-game"
+
+
+def game_image_present() -> bool:
+    """True when the game image exists in the local image store."""
+    try:
+        completed = subprocess.run(
+            ["docker", "image", "inspect", GAME_IMAGE], capture_output=True, text=True
+        )
+    except FileNotFoundError as error:
+        raise CommandError(
+            "docker executable not found; the docker backend needs Docker"
+        ) from error
+    return completed.returncode == 0
+
 
 def compose_up() -> None:
     """Start the service trio and block until compose healthchecks pass."""

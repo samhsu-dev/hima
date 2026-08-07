@@ -15,10 +15,11 @@ from hima_dht_cli.workspace import SC2_APP, SERVICE_DIR
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 
 from . import _docker, _native
-from ._health import HEALTH_PATHS, healthy, leader_model_present, ollama_url
+from ._health import HEALTH_PATHS, healthy, leader_models, model_served, ollama_url
 from ._manifest import (
     MANIFEST_FILE,
     DockerService,
+    ModelEndpoint,
     NativeService,
     ServiceBackend,
     ServiceManifest,
@@ -32,10 +33,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_ADVISOR_PORT = 8090
 DEFAULT_OLLAMA_PORT = 11434
 DEFAULT_LEADER_MODEL = "qwen3:8b"
+# Ollama accepts any bearer token; a remote provider needs its real key.
+DEFAULT_LEADER_API_KEY = "ollama"
 
 # Serializes `up` and `down`; two concurrent runs would race on pid
 # files and the manifest.
 LOCK_FILE = SERVICE_DIR / "up-down.lock"
+
+
+def _local_leader_url(ollama_port: int) -> str:
+    # The OpenAI-compatible base URL of a locally provisioned `ollama serve`.
+    return f"http://localhost:{ollama_port}/v1"
+
+
+DEFAULT_LEADER_BASE_URL = _local_leader_url(DEFAULT_OLLAMA_PORT)
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,8 @@ class ServiceOptions:
     webui_port: int = DEFAULT_WEBUI_PORT
     ollama_port: int = DEFAULT_OLLAMA_PORT
     model: str = DEFAULT_LEADER_MODEL
+    leader_base_url: str = DEFAULT_LEADER_BASE_URL
+    leader_api_key: str = DEFAULT_LEADER_API_KEY
 
 
 def up(options: ServiceOptions, skip_pull: bool, manifest_out: Path | None = None) -> None:
@@ -123,28 +136,50 @@ def _collect_checks(
     # The manifest is the source of truth for what `up` started; options
     # only fill in when no `up` has recorded services.
     if manifest is None:
-        endpoints = _endpoints(options)
-        entries: dict[str, NativeService | DockerService] = {}
-        model = options.model
-    else:
-        endpoints = {name: entry.endpoint for name, entry in manifest.services.items()}
-        entries = dict(manifest.services)
-        model = manifest.leader_model
-    ollama_root = endpoints.get("ollama", ollama_url(options.ollama_port))
+        return _option_checks(options)
     checks = [
-        _service_check(name, endpoints.get(name), entries.get(name))
-        for name in ("advisor", "webui", "ollama")
+        _service_check(name, entry.endpoint, entry) for name, entry in manifest.services.items()
     ]
-    checks.append(("leader model", leader_model_present(ollama_root, model), model))
-    checks.append(("StarCraft II", SC2_APP.exists(), str(SC2_APP)))
+    checks.append(_leader_check(manifest.endpoints.get("leader"), options.leader_api_key))
+    checks.append(_game_runtime_check(manifest.backend))
     return checks
 
 
-def _service_check(
-    name: str, endpoint: str | None, entry: NativeService | DockerService | None
-) -> tuple[str, bool, str]:
+def _option_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
+    endpoints = _endpoints(options)
+    checks = [_service_check(name, endpoints[name], None) for name in ("advisor", "webui")]
+    leader = ModelEndpoint(url=options.leader_base_url, model=options.model)
+    checks.append(_leader_check(leader, options.leader_api_key))
+    checks.append(_game_runtime_check(ServiceBackend.NATIVE))
+    return checks
+
+
+def _leader_check(endpoint: ModelEndpoint | None, api_key: str) -> tuple[str, bool, str]:
     if endpoint is None:
-        return (name, False, "not recorded in the manifest")
+        return ("leader", False, "no leader endpoint recorded in the manifest")
+    served = leader_models(endpoint.url, api_key)
+    if served is None:
+        return ("leader", False, f"{endpoint.url} unreachable")
+    if not model_served(endpoint.model, served):
+        return ("leader", False, f"{endpoint.url} does not serve model {endpoint.model}")
+    return ("leader", True, f"{endpoint.url} model={endpoint.model}")
+
+
+def _game_runtime_check(backend: ServiceBackend) -> tuple[str, bool, str]:
+    if backend is ServiceBackend.DOCKER:
+        present = _docker.game_image_present()
+        detail = (
+            _docker.GAME_IMAGE
+            if present
+            else f"image {_docker.GAME_IMAGE} absent — `hima run --headless` builds it"
+        )
+        return ("game image", present, detail)
+    return ("StarCraft II", SC2_APP.exists(), str(SC2_APP))
+
+
+def _service_check(
+    name: str, endpoint: str, entry: NativeService | DockerService | None
+) -> tuple[str, bool, str]:
     health = f"{endpoint}{HEALTH_PATHS[name]}"
     if isinstance(entry, NativeService):
         return _native_check(name, health, entry)
@@ -165,18 +200,49 @@ def _native_check(name: str, health: str, entry: NativeService) -> tuple[str, bo
     return (name, reachable and alive, f"{health} pid={entry.pid}{suffix}")
 
 
+def _provisions_leader(options: ServiceOptions) -> bool:
+    # Textual comparison is the contract: any override — even an equivalent
+    # spelling of the local default — selects verify-only against an
+    # external endpoint instead of provisioning `ollama serve`.
+    return options.leader_base_url == _local_leader_url(options.ollama_port)
+
+
+def _verify_leader_endpoint(options: ServiceOptions) -> None:
+    served = leader_models(options.leader_base_url, options.leader_api_key)
+    if served is None:
+        raise CommandError(
+            f"leader endpoint not reachable at {options.leader_base_url} — start an "
+            f"OpenAI-compatible server there (e.g. `ollama serve`) or point "
+            f"HIMA_LEADER_BASE_URL at your provider"
+        )
+    if not model_served(options.model, served):
+        raise CommandError(
+            f"leader model {options.model} not served at {options.leader_base_url} — "
+            f"pull it there or check --model / HIMA_LEADER_MODEL"
+        )
+
+
 def _up_native(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
-    specs = {
-        "ollama": _native.ollama_spec(options.ollama_port),
-        "advisor": _native.advisor_spec(options.advisor_port),
-        "webui": _native.webui_spec(options.webui_port),
-    }
-    pids = {"ollama": _native.ensure_service(specs["ollama"])}
-    _native.ensure_leader_model(options.model, skip_pull, options.ollama_port)
+    specs: dict[str, _native.ServiceSpec] = {}
+    pids: dict[str, int] = {}
+    if _provisions_leader(options):
+        specs["ollama"] = _native.ollama_spec(options.ollama_port)
+        pids["ollama"] = _native.ensure_service(specs["ollama"])
+        _native.ensure_leader_model(options.model, skip_pull, options.ollama_port)
+    else:
+        _verify_leader_endpoint(options)
+    specs["advisor"] = _native.advisor_spec(options.advisor_port)
+    specs["webui"] = _native.webui_spec(options.webui_port)
     pids["advisor"] = _native.ensure_service(specs["advisor"])
     pids["webui"] = _native.ensure_service(specs["webui"])
+    return _record(ServiceBackend.NATIVE, options, _native_entries(options, specs, pids))
+
+
+def _native_entries(
+    options: ServiceOptions, specs: dict[str, _native.ServiceSpec], pids: dict[str, int]
+) -> dict[str, NativeService | DockerService]:
     endpoints = _endpoints(options)
-    entries: dict[str, NativeService | DockerService] = {
+    return {
         name: NativeService(
             endpoint=endpoints[name],
             pid=pids[name],
@@ -185,7 +251,6 @@ def _up_native(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
         )
         for name, spec in specs.items()
     }
-    return _record(ServiceBackend.NATIVE, options, entries)
 
 
 def _up_docker(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
@@ -230,7 +295,6 @@ def _record(
     return ServiceManifest(
         backend=backend,
         created=datetime.now().astimezone().isoformat(timespec="seconds"),
-        leader_model=options.model,
-        leader_endpoint=f"{ollama_url(options.ollama_port)}/v1",
+        endpoints={"leader": ModelEndpoint(url=options.leader_base_url, model=options.model)},
         services=entries,
     )

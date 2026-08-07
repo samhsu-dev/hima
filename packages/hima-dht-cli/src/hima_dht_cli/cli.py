@@ -24,15 +24,13 @@ from hima_dht_cli.replay import play
 from hima_dht_cli.services import (
     DEFAULT_ADVISOR_HOST,
     DEFAULT_ADVISOR_PORT,
+    DEFAULT_LEADER_API_KEY,
+    DEFAULT_LEADER_BASE_URL,
     DEFAULT_LEADER_MODEL,
 )
 from hima_dht_cli.workspace import RUN_ROOT
 from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
 from hima_dht_web import server
-
-DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
-# Ollama accepts any bearer token; a remote provider needs its real key.
-DEFAULT_LEADER_API_KEY = "ollama"
 
 # Environment keys shared with docker-compose.yml interpolation (.env.example).
 ENV_ADVISOR_HOST = "HIMA_ADVISOR_HOST"
@@ -84,6 +82,8 @@ app = typer.Typer(
 AdvisorPortOption = Annotated[int, typer.Option(envvar=ENV_ADVISOR_PORT)]
 WebuiPortOption = Annotated[int, typer.Option(envvar=ENV_WEBUI_PORT)]
 LeaderModelOption = Annotated[str, typer.Option(envvar=ENV_LEADER_MODEL)]
+LeaderBaseUrlOption = Annotated[str, typer.Option(envvar=ENV_LEADER_BASE_URL)]
+LeaderApiKeyOption = Annotated[str, typer.Option(envvar=ENV_LEADER_API_KEY)]
 BackendOption = Annotated[services.ServiceBackend, typer.Option(envvar=ENV_SERVICE_BACKEND)]
 OllamaPortOption = Annotated[int, typer.Option(envvar=ENV_OLLAMA_PORT)]
 
@@ -109,10 +109,12 @@ def up(
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
     ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
+    base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
+    api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
     skip_pull: Annotated[bool, typer.Option("--skip-pull")] = False,
     manifest_out: Annotated[Path | None, typer.Option("--manifest-out")] = None,
 ) -> None:
-    """Launch advisor, Ollama, and the webui, wait until healthy."""
+    """Launch the managed services and verify or provision the leader."""
     services.up(
         services.ServiceOptions(
             backend=backend,
@@ -120,6 +122,8 @@ def up(
             webui_port=webui_port,
             ollama_port=ollama_port,
             model=model,
+            leader_base_url=base_url,
+            leader_api_key=api_key,
         ),
         skip_pull,
         manifest_out,
@@ -138,6 +142,8 @@ def status(
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
     ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
+    base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
+    api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
 ) -> None:
     """Report service and game state; exit 1 when a check fails."""
     ok = services.status(
@@ -146,6 +152,8 @@ def status(
             webui_port=webui_port,
             ollama_port=ollama_port,
             model=model,
+            leader_base_url=base_url,
+            leader_api_key=api_key,
         )
     )
     if not ok:
@@ -160,8 +168,8 @@ def run(
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     advisor_host: Annotated[str, typer.Option(envvar=ENV_ADVISOR_HOST)] = DEFAULT_ADVISOR_HOST,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
-    base_url: Annotated[str, typer.Option(envvar=ENV_LEADER_BASE_URL)] = DEFAULT_LEADER_BASE_URL,
-    api_key: Annotated[str, typer.Option(envvar=ENV_LEADER_API_KEY)] = DEFAULT_LEADER_API_KEY,
+    base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
+    api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
     realtime: Annotated[bool, typer.Option("--realtime")] = False,
 ) -> None:
     """Play one game and archive its outputs under runs/."""

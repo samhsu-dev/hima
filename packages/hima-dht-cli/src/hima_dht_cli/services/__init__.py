@@ -3,10 +3,13 @@
 __all__ = [
     "DEFAULT_ADVISOR_HOST",
     "DEFAULT_ADVISOR_PORT",
+    "DEFAULT_LEADER_API_KEY",
+    "DEFAULT_LEADER_BASE_URL",
     "DEFAULT_LEADER_MODEL",
     "DEFAULT_OLLAMA_PORT",
     "MANIFEST_FILE",
     "DockerService",
+    "ModelEndpoint",
     "NativeService",
     "ServiceBackend",
     "ServiceManifest",
@@ -14,9 +17,8 @@ __all__ = [
     "ServiceSpec",
     "advisor_healthy",
     "down",
-    "leader_model_present",
     "leader_models",
-    "ollama_healthy",
+    "model_served",
     "read_manifest",
     "status",
     "up",
@@ -25,12 +27,13 @@ __all__ = [
 from ._health import (
     DEFAULT_ADVISOR_HOST,
     advisor_healthy,
-    leader_model_present,
     leader_models,
-    ollama_healthy,
+    model_served,
 )
 from ._lifecycle import (
     DEFAULT_ADVISOR_PORT,
+    DEFAULT_LEADER_API_KEY,
+    DEFAULT_LEADER_BASE_URL,
     DEFAULT_LEADER_MODEL,
     DEFAULT_OLLAMA_PORT,
     ServiceOptions,
@@ -41,6 +44,7 @@ from ._lifecycle import (
 from ._manifest import (
     MANIFEST_FILE,
     DockerService,
+    ModelEndpoint,
     NativeService,
     ServiceBackend,
     ServiceManifest,

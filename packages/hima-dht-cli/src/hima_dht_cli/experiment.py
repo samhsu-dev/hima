@@ -72,7 +72,7 @@ def _require_services(options: RunOptions) -> None:
             f"leader endpoint not reachable at {options.base_url} — "
             "run `hima up` or check --base-url / HIMA_LEADER_BASE_URL"
         )
-    if not _model_served(options.model, served):
+    if not services.model_served(options.model, served):
         raise CommandError(
             f"leader model {options.model} not served at {options.base_url} — "
             "run `hima up` or check --model / HIMA_LEADER_MODEL"
@@ -84,10 +84,6 @@ def _require_services(options: RunOptions) -> None:
         options.base_url,
         len(served),
     )
-
-
-def _model_served(model: str, served: list[str]) -> bool:
-    return any(name == model or name.startswith(f"{model}:") for name in served)
 
 
 def _invoke_game(options: RunOptions) -> None:

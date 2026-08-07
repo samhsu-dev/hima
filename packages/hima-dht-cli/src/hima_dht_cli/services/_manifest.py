@@ -13,7 +13,7 @@ from hima_dht_cli.workspace import SERVICE_DIR
 
 MANIFEST_FILE = SERVICE_DIR / "manifest.toml"
 # Bumped when the TOML layout changes; readers reject every other version.
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 
 
 class ServiceBackend(str, Enum):
@@ -42,18 +42,27 @@ class DockerService:
 
 
 @dataclass(frozen=True)
-class ServiceManifest:
-    """Record of one successful `up`: backend, leader engine, services.
+class ModelEndpoint:
+    """One OpenAI-compatible model endpoint the deployment consumes.
 
-    `leader_endpoint` is the OpenAI-compatible URL of the leader engine
-    `up` ensures; a `HIMA_LEADER_BASE_URL` override may point games at a
-    different endpoint.
+    `url` is the base URL `up` verified from the host view. Never carries
+    an API key — secrets stay in the environment chain.
+    """
+
+    url: str
+    model: str
+
+
+@dataclass(frozen=True)
+class ServiceManifest:
+    """Record of one successful `up`: backend, model endpoints, services.
+
+    `endpoints` is keyed by role; today the single role is `leader`.
     """
 
     backend: ServiceBackend
     created: str
-    leader_model: str
-    leader_endpoint: str
+    endpoints: dict[str, ModelEndpoint]
     services: dict[str, NativeService | DockerService]
 
 
@@ -64,7 +73,7 @@ def write_manifest(manifest: ServiceManifest, path: Path = MANIFEST_FILE) -> Non
         "version": MANIFEST_VERSION,
         "backend": manifest.backend.value,
         "created": manifest.created,
-        "leader": {"model": manifest.leader_model, "endpoint": manifest.leader_endpoint},
+        "endpoints": {role: asdict(endpoint) for role, endpoint in manifest.endpoints.items()},
         "services": {name: asdict(entry) for name, entry in manifest.services.items()},
     }
     # Atomic replace: a crash mid-write must not leave a torn manifest.
@@ -97,8 +106,9 @@ def read_manifest(path: Path = MANIFEST_FILE) -> ServiceManifest | None:
         return ServiceManifest(
             backend=backend,
             created=document["created"],
-            leader_model=document["leader"]["model"],
-            leader_endpoint=document["leader"]["endpoint"],
+            endpoints={
+                role: ModelEndpoint(**fields) for role, fields in document["endpoints"].items()
+            },
             services={
                 name: _entry(backend, fields) for name, fields in document["services"].items()
             },

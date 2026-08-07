@@ -35,10 +35,6 @@ def ollama_url(port: int) -> str:
     return f"http://localhost:{port}"
 
 
-def ollama_healthy(root: str) -> bool:
-    return healthy(f"{root}{HEALTH_PATHS['ollama']}")
-
-
 def leader_model_present(root: str, model: str) -> bool:
     # A foreign server on the port may answer 200 with an arbitrary body;
     # a body that does not parse as an Ollama tag list means absent.
@@ -48,7 +44,16 @@ def leader_model_present(root: str, model: str) -> bool:
         names = [entry["name"] for entry in response.json().get("models", [])]
     except (requests.RequestException, AttributeError, KeyError, TypeError):
         return False
-    return any(name == model or name.startswith(f"{model}:") for name in names)
+    return model_served(model, names)
+
+
+def model_served(model: str, served: list[str]) -> bool:
+    """True when `served` lists `model` exactly or with an extra tag suffix.
+
+    Ollama may report `qwen3:8b` as `qwen3:8b:q4`; a bare family name is
+    not the requested tag.
+    """
+    return any(name == model or name.startswith(f"{model}:") for name in served)
 
 
 def leader_models(base_url: str, api_key: str) -> list[str] | None:
