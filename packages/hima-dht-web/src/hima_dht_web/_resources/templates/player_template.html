@@ -6,67 +6,111 @@
 <title>HIMA Replay Player</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e;
-    --own: #4aa3ff; --enemy: #ff5252; --mineral: #67e8f9; --gas: #c084fc;
-    --accent: #f0883e;
+    --heritage: #002d72; --spirit: #68ace5; --green: #008767; --red: #a6192e;
+    --sand: #8a6a2f; --paper: #ffffff; --ink: #1c1a17; --ink-quiet: #5d5750;
+    --rule: #c9c5be; --rule-faint: #e6e3dd; --wash: #f5f3ef;
+    --own: #002d72; --enemy: #a6192e; --mineral: #68ace5; --gas: #008767;
+    --map-bg: #f5f3ef;
+    --serif: "Source Serif 4", Charter, Georgia, serif;
+    --sans: "Work Sans", "Helvetica Neue", system-ui, sans-serif;
+    --mono: ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --heritage: #9dc4ee; --green: #5cb99f; --red: #e08b7c; --sand: #cba052;
+      --paper: #14161a; --ink: #e4e1db; --ink-quiet: #a49e95;
+      --rule: #3b3f47; --rule-faint: #262a30; --wash: #1b1e23;
+      --own: #68ace5; --enemy: #e08b7c; --gas: #5cb99f; --map-bg: #1b1e23;
+    }
+  }
+  :root[data-theme="dark"] {
+    --heritage: #9dc4ee; --green: #5cb99f; --red: #e08b7c; --sand: #cba052;
+    --paper: #14161a; --ink: #e4e1db; --ink-quiet: #a49e95;
+    --rule: #3b3f47; --rule-faint: #262a30; --wash: #1b1e23;
+    --own: #68ace5; --enemy: #e08b7c; --gas: #5cb99f; --map-bg: #1b1e23;
+  }
+  :root[data-theme="light"] {
+    --heritage: #002d72; --spirit: #68ace5; --green: #008767; --red: #a6192e;
+    --sand: #8a6a2f; --paper: #ffffff; --ink: #1c1a17; --ink-quiet: #5d5750;
+    --rule: #c9c5be; --rule-faint: #e6e3dd; --wash: #f5f3ef;
+    --own: #002d72; --enemy: #a6192e; --mineral: #68ace5; --gas: #008767;
+    --map-bg: #f5f3ef;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: var(--bg); color: var(--text);
-    font: 16px/1.5 -apple-system, "Segoe UI", sans-serif;
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.5 var(--sans);
     display: flex; flex-direction: column; height: 100vh; overflow: hidden;
   }
   header {
-    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    border-top: 3px solid var(--heritage);
+    padding: 10px 16px; border-bottom: 1px solid var(--rule);
     display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
   }
-  header h1 { font-size: 17px; font-weight: 600; }
-  header .badge {
-    font-size: 13px; padding: 1px 10px; border-radius: 10px; font-weight: 600;
+  header h1 { font-family: var(--serif); font-size: 18px; font-weight: 600; }
+  .badge {
+    font-size: 11px; font-weight: 600; letter-spacing: .09em;
+    text-transform: uppercase;
   }
-  .badge.Defeat { background: #67060c; color: #ffb3b8; }
-  .badge.Victory { background: #0f5323; color: #9ff0b5; }
-  .badge.Tie { background: #3a3f45; color: #d0d7de; }
-  .badge.live { background: #7d2f00; color: #ffd8b5; }
-  header .muted { color: var(--muted); font-size: 13px; }
+  .badge.Defeat { color: var(--red); }
+  .badge.Victory { color: var(--green); }
+  .badge.Tie { color: var(--ink-quiet); }
+  .badge.live { color: var(--heritage); }
+  header .muted { color: var(--ink-quiet); font-size: 13px; }
+  .legend { font-size: 12px; color: var(--ink-quiet); white-space: nowrap; }
+  .legend .sw {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    vertical-align: -1px; margin: 0 4px 0 10px;
+  }
+  .legend .sw:first-child { margin-left: 0; }
+  .legend .sw.own { background: var(--own); }
+  .legend .sw.enemy { background: var(--enemy); }
+  .legend .sw.mineral { background: var(--mineral); border-radius: 2px; }
+  .legend .sw.gas { background: var(--gas); border-radius: 2px; }
   main { flex: 1; display: flex; min-height: 0; }
   #stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px; min-width: 0; }
-  canvas { max-width: 100%; max-height: 100%; border: 1px solid var(--border); border-radius: 6px; }
+  canvas { max-width: 100%; max-height: 100%; border: 1px solid var(--rule); }
   aside {
-    width: 340px; border-left: 1px solid var(--border); display: flex;
+    width: 340px; border-left: 1px solid var(--rule); display: flex;
     flex-direction: column; min-height: 0;
   }
   aside h2 {
-    font-size: 13px; color: var(--muted); font-weight: 600;
-    padding: 8px 12px 4px; letter-spacing: .06em;
+    font-size: 11px; color: var(--ink-quiet); font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase;
+    padding: 10px 12px 4px;
   }
-  #decisions { flex: 1.2; overflow-y: auto; border-bottom: 1px solid var(--border); }
+  #decisions { flex: 1.2; overflow-y: auto; border-bottom: 1px solid var(--rule); }
   #commands { flex: 1; overflow-y: auto; }
   .decision {
     padding: 6px 12px; border-left: 3px solid transparent; cursor: pointer;
-    font-size: 13px; color: var(--muted);
+    font-size: 13px; color: var(--ink-quiet);
   }
-  .decision:hover { background: var(--panel); }
-  .decision.active { border-left-color: var(--accent); color: var(--text); background: var(--panel); }
-  .decision .head { font-weight: 600; color: var(--accent); }
-  .command { padding: 2px 12px; font-size: 13px; font-family: ui-monospace, Menlo, monospace; }
-  .command .st-ok { color: #7ee787; }
-  .command .st-bad { color: #ff7b72; }
+  .decision:hover { background: var(--wash); }
+  .decision.active { border-left-color: var(--sand); color: var(--ink); background: var(--wash); }
+  .decision .head { font-weight: 600; color: var(--heritage); }
+  .command { padding: 2px 12px; font-size: 13px; font-family: var(--mono); }
+  .command .st-ok { color: var(--green); }
+  .command .st-bad { color: var(--red); }
   footer {
-    border-top: 1px solid var(--border); padding: 10px 16px;
+    border-top: 1px solid var(--rule); padding: 10px 16px;
     display: flex; align-items: center; gap: 12px;
   }
   button, select {
-    background: var(--panel); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 4px 12px; font-size: 15px; cursor: pointer;
+    background: var(--wash); color: var(--ink); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 4px 12px; font-size: 14px; font-family: var(--sans);
+    cursor: pointer;
   }
   #timeline { flex: 1; position: relative; height: 28px; }
-  #slider { width: 100%; position: absolute; top: 4px; }
+  #slider { width: 100%; position: absolute; top: 4px; accent-color: var(--heritage); }
   #ticks { position: absolute; left: 0; right: 0; top: 22px; height: 6px; pointer-events: none; }
-  #ticks span { position: absolute; width: 2px; height: 6px; background: var(--accent); }
-  #readout { font-size: 14px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-  #clock { font-size: 15px; font-variant-numeric: tabular-nums; min-width: 110px; text-align: center; }
+  #ticks span { position: absolute; width: 2px; height: 6px; background: var(--sand); }
+  #readout { font-size: 13px; color: var(--ink-quiet); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #clock { font-size: 14px; font-variant-numeric: tabular-nums; min-width: 110px; text-align: center; }
+  #tip {
+    position: fixed; display: none; pointer-events: none; z-index: 10;
+    font-size: 12px; font-family: var(--sans); color: var(--ink);
+    background: var(--paper); border: 1px solid var(--rule); padding: 3px 8px;
+  }
 </style>
 </head>
 <body>
@@ -74,7 +118,8 @@
   <h1 id="title"></h1>
   <span id="result" class="badge"></span>
   <span id="mapname" class="muted"></span>
-  <span class="muted">Enemy units are visible only inside friendly vision (fog of war)</span>
+  <span class="legend"><span class="sw own"></span>own <span class="sw enemy"></span>enemy <span class="sw mineral"></span>mineral <span class="sw gas"></span>gas</span>
+  <span class="muted">Enemy units are visible only inside friendly vision (fog of war) · Space plays, arrows seek</span>
 </header>
 <main>
   <div id="stage"><canvas id="map"></canvas></div>
@@ -101,6 +146,7 @@
   </div>
   <span id="readout"></span>
 </footer>
+<div id="tip"></div>
 <script>
 const HIMA = __HIMA_DATA_JSON__;
 
@@ -121,6 +167,19 @@ ctx.scale(DPR, DPR);
 const mx = x => (x - PX) * SCALE;
 const my = y => (PH - (y - PY)) * SCALE;
 const fmt = t => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+function readColors() {
+  const style = getComputedStyle(document.documentElement);
+  const v = name => style.getPropertyValue(name).trim();
+  return { bg: v("--map-bg"), own: v("--own"), enemy: v("--enemy"),
+           mineral: v("--mineral"), gas: v("--gas"), track: v("--rule"),
+           ok: v("--green"), bad: v("--red") };
+}
+let COLORS = readColors();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  COLORS = readColors();
+  syncAll(true);
+});
 
 document.getElementById("title").textContent = HIMA.meta.replay;
 document.getElementById("mapname").textContent = `${HIMA.meta.map} · ${fmt(DURATION)}`;
@@ -170,15 +229,17 @@ function frameIndexFor(t) {
 }
 
 function drawFrame(frame) {
-  ctx.fillStyle = "#0b1220";
+  ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, CSS_W, CSS_H);
   for (const [x, y, kind] of HIMA.neutral) {
-    ctx.fillStyle = kind === "m" ? "rgba(103,232,249,.5)" : "rgba(192,132,252,.6)";
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = kind === "m" ? COLORS.mineral : COLORS.gas;
     ctx.fillRect(mx(x) - 2, my(y) - 2, 4, 4);
   }
+  ctx.globalAlpha = 1;
   for (const [ti, x, y, owner, hp] of frame.u) {
     const meta = HIMA.type_meta[ti];
-    const color = owner === 1 ? "#4aa3ff" : "#ff5252";
+    const color = owner === 1 ? COLORS.own : COLORS.enemy;
     const r = Math.max(meta.r * SCALE, 1.6);
     ctx.fillStyle = color;
     if (meta.s) {
@@ -192,9 +253,9 @@ function drawFrame(frame) {
     }
     if (hp < 0.99) {
       const w = Math.max(r * 2, 8);
-      ctx.fillStyle = "#30363d";
+      ctx.fillStyle = COLORS.track;
       ctx.fillRect(mx(x) - w / 2, my(y) - r - 5, w, 2.5);
-      ctx.fillStyle = hp > 0.5 ? "#7ee787" : "#ff7b72";
+      ctx.fillStyle = hp > 0.5 ? COLORS.ok : COLORS.bad;
       ctx.fillRect(mx(x) - w / 2, my(y) - r - 5, w * hp, 2.5);
     }
     ctx.globalAlpha = 1;
@@ -256,6 +317,47 @@ playBtn.onclick = () => {
   setPlaying(!playing);
 };
 slider.oninput = () => { simT = Number(slider.value); syncAll(true); };
+
+const SEEK_STEP_S = 5;
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.code === "Space") {
+    e.preventDefault();
+    playBtn.click();
+  } else if (e.code === "ArrowLeft") {
+    simT = Math.max(0, simT - SEEK_STEP_S);
+    syncAll(true);
+  } else if (e.code === "ArrowRight") {
+    simT = Math.min(DURATION, simT + SEEK_STEP_S);
+    syncAll(true);
+  }
+});
+
+const tip = document.getElementById("tip");
+const HOVER_SLACK_PX = 4;
+
+canvas.addEventListener("mousemove", e => {
+  const frame = HIMA.frames[lastIdx];
+  if (!frame) { tip.style.display = "none"; return; }
+  const rect = canvas.getBoundingClientRect();
+  const toCanvas = CSS_W / rect.width;
+  const cx = (e.clientX - rect.left) * toCanvas;
+  const cy = (e.clientY - rect.top) * toCanvas;
+  let best = null, bestDist = Infinity;
+  for (const [ti, x, y, owner, hp] of frame.u) {
+    const dist = Math.hypot(mx(x) - cx, my(y) - cy);
+    const reach = Math.max(HIMA.type_meta[ti].r * SCALE, 1.6) + HOVER_SLACK_PX;
+    if (dist <= reach && dist < bestDist) { bestDist = dist; best = [ti, owner, hp]; }
+  }
+  if (!best) { tip.style.display = "none"; return; }
+  const side = best[1] === 1 ? "own" : "enemy";
+  tip.textContent = `${HIMA.types[best[0]]} · ${side} · ${Math.round(best[2] * 100)}% HP`;
+  tip.style.left = (e.clientX + 12) + "px";
+  tip.style.top = (e.clientY + 12) + "px";
+  tip.style.display = "block";
+});
+canvas.addEventListener("mouseleave", () => { tip.style.display = "none"; });
 
 const FOLLOW_SLACK = 3;
 

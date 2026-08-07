@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hima games</title>
+<style>
+  :root {
+    --heritage: #002d72; --spirit: #68ace5; --green: #008767; --red: #a6192e;
+    --sand: #8a6a2f; --paper: #ffffff; --ink: #1c1a17; --ink-quiet: #5d5750;
+    --rule: #c9c5be; --rule-faint: #e6e3dd; --wash: #f5f3ef;
+    --serif: "Source Serif 4", Charter, Georgia, serif;
+    --sans: "Work Sans", "Helvetica Neue", system-ui, sans-serif;
+    --mono: ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --heritage: #9dc4ee; --green: #5cb99f; --red: #e08b7c; --sand: #cba052;
+      --paper: #14161a; --ink: #e4e1db; --ink-quiet: #a49e95;
+      --rule: #3b3f47; --rule-faint: #262a30; --wash: #1b1e23;
+    }
+  }
+  :root[data-theme="dark"] {
+    --heritage: #9dc4ee; --green: #5cb99f; --red: #e08b7c; --sand: #cba052;
+    --paper: #14161a; --ink: #e4e1db; --ink-quiet: #a49e95;
+    --rule: #3b3f47; --rule-faint: #262a30; --wash: #1b1e23;
+  }
+  :root[data-theme="light"] {
+    --heritage: #002d72; --spirit: #68ace5; --green: #008767; --red: #a6192e;
+    --sand: #8a6a2f; --paper: #ffffff; --ink: #1c1a17; --ink-quiet: #5d5750;
+    --rule: #c9c5be; --rule-faint: #e6e3dd; --wash: #f5f3ef;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 1.5rem 5rem;
+    background: var(--paper); color: var(--ink);
+    font: 17px/1.6 var(--serif);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 41rem; margin: 0 auto; }
+  .masthead { border-top: 3px solid var(--heritage); padding-top: 1.1rem; margin: 2.5rem 0 1.8rem; }
+  .doctype {
+    font-family: var(--sans); font-size: 0.64rem; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--heritage); margin: 0 0 0.55rem;
+  }
+  h1 { font-family: var(--serif); font-weight: 600; font-size: 1.8rem; line-height: 1.22; margin: 0; }
+  .scroll { overflow-x: auto; }
+  table {
+    border-collapse: collapse; width: 100%;
+    font-family: var(--sans); font-size: 0.82rem; line-height: 1.4;
+  }
+  thead th {
+    text-align: left; font-weight: 600; font-size: 0.65rem;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--heritage);
+    padding: 0 1rem 0.42rem 0; border-bottom: 1px solid var(--heritage);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 0.5rem 1rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule-faint); vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+  td:last-child, th:last-child { padding-right: 0; }
+  .k { white-space: nowrap; font-family: var(--mono); font-size: 0.78rem; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  a { color: var(--heritage); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .badge {
+    font-family: var(--sans); font-weight: 600; font-size: 0.65rem;
+    letter-spacing: 0.09em; text-transform: uppercase;
+  }
+  .badge.Victory { color: var(--green); }
+  .badge.Defeat { color: var(--red); }
+  .badge.Tie { color: var(--ink-quiet); }
+  .badge.live { color: var(--heritage); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <p class="doctype">HIMA · Game Observation</p>
+    <h1>Games</h1>
+  </header>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Game</th><th>Result</th><th>Duration</th></tr></thead>
+      <tbody>
+__HIMA_ROWS__</tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

@@ -2,14 +2,24 @@
 
 Payload shape and error mapping: docs/design-observation.md.
 """
+
 import json
 from pathlib import Path
+from typing import TypedDict
 
-from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 from hima_dht_records import RECORD_FILE, fold_lines
+from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 
 LIVE_GAME_ID = "live"
 END_SCAN_BYTES = 4096
+
+
+class GameEntry(TypedDict):
+    """One game-listing row: an archived run or the in-progress live game."""
+
+    id: str
+    result: str | None
+    time: str | None
 
 
 class GameStore:
@@ -19,7 +29,7 @@ class GameStore:
         self.runs_dir = runs_dir
         self.tmp_dir = tmp_dir
 
-    def list_games(self) -> list[dict]:
+    def list_games(self) -> list[GameEntry]:
         """List archived runs, newest first, preceded by the live game when
         one is in progress."""
         games = self._archived_entries()
@@ -39,8 +49,12 @@ class GameStore:
         directory = self._game_dir(game_id)
         folded, record_offset = _fold_snapshot(directory / RECORD_FILE)
         payload = {
-            "meta": {**folded["meta"], "replay": _replay_name(directory, game_id),
-                     "result": folded["result"], "duration": _duration(folded["frames"])},
+            "meta": {
+                **folded["meta"],
+                "replay": _replay_name(directory, game_id),
+                "result": folded["result"],
+                "duration": _duration(folded["frames"]),
+            },
             "types": folded["types"],
             "type_meta": folded["type_meta"],
             "neutral": folded["neutral"],
@@ -61,19 +75,20 @@ class GameStore:
             raise KeyError(game_id)
         return directory
 
-    def _archived_entries(self) -> list[dict]:
+    def _archived_entries(self) -> list[GameEntry]:
         if not self.runs_dir.is_dir():
             return []
-        names = sorted((entry.name for entry in self.runs_dir.iterdir() if entry.is_dir()),
-                       reverse=True)
+        names = sorted(
+            (entry.name for entry in self.runs_dir.iterdir() if entry.is_dir()), reverse=True
+        )
         return [self._archived_entry(name) for name in names]
 
-    def _archived_entry(self, name: str) -> dict:
+    def _archived_entry(self, name: str) -> GameEntry:
         metric_path = self.runs_dir / name / "metric.json"
         metric = json.loads(metric_path.read_text(encoding="utf-8")) if metric_path.exists() else {}
         return {"id": name, "result": metric.get("result"), "time": metric.get("time")}
 
-    def _live_entry(self) -> dict | None:
+    def _live_entry(self) -> GameEntry | None:
         record_path = self.tmp_dir / RECORD_FILE
         if not record_path.exists() or _has_end_record(record_path):
             return None
