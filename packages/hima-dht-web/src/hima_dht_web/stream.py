@@ -4,12 +4,12 @@ Event kinds and the mid-join contract: docs/design-observation.md.
 """
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator
 
-from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 from hima_dht_records import RECORD_FILE
+from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 
 POLL_INTERVAL = 1.0
 END_KIND = "end"
