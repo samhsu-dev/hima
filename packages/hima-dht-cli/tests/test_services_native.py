@@ -13,6 +13,8 @@ Test cases:
   record carrying the service name and the attempt count.
 - test_wait_healthy_dead_process_reports_log_tail: a process that exits
   before health fails immediately, quoting the service log.
+- test_launch_rotates_oversized_log: a log beyond the rotation bound
+  moves to a .log.1 backup before the new launch appends.
 - test_stop_one_logs_skip_without_pid_file: stopping a service that hima
   never started emits a skip record instead of touching any process.
 - test_stop_one_escalates_to_sigkill: a process ignoring SIGTERM gets
@@ -135,6 +137,17 @@ def test_wait_healthy_dead_process_reports_log_tail(
 
     with pytest.raises(CommandError, match="address already in use"):
         _native.wait_healthy(spec, child.pid)
+
+
+def test_launch_rotates_oversized_log(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(_native, "LOG_ROTATE_BYTES", 10)
+    spec = _spec(tmp_path)
+    spec.log_file.write_text("x" * 100, encoding="utf-8")
+
+    _native.launch(spec)
+
+    backup = spec.log_file.with_name("advisor.log.1")
+    assert backup.read_text(encoding="utf-8") == "x" * 100
 
 
 def test_stop_one_logs_skip_without_pid_file(

@@ -26,6 +26,8 @@ STOP_WAIT_S = 10
 KILL_WAIT_S = 5
 # Failure diagnostics quote this much of the end of the service log.
 LOG_TAIL_BYTES = 2048
+# A log beyond this size rotates to one .1 backup at the next launch.
+LOG_ROTATE_BYTES = 10 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -142,6 +144,7 @@ def owned_pid(spec: ServiceSpec) -> int | None:
 
 def launch(spec: ServiceSpec) -> int:
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)
+    _rotate_log(spec.log_file)
     try:
         with open(spec.log_file, "ab") as log:
             process = subprocess.Popen(
@@ -267,6 +270,13 @@ def _exited(pid: int) -> bool:
         return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         return True
+
+
+def _rotate_log(log_file: Path) -> None:
+    # Bounds growth across launches; a single long run stays unrotated
+    # because the running process keeps its open file handle.
+    if log_file.exists() and log_file.stat().st_size > LOG_ROTATE_BYTES:
+        log_file.replace(log_file.with_name(log_file.name + ".1"))
 
 
 def _log_tail(log_file: Path) -> str:
