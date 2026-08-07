@@ -2,29 +2,28 @@
 
 Defaults resolve as: CLI flag > exported environment > `.env` in the
 working directory (shared with docker compose interpolation) > code default.
+Environment lookup is declared per option via typer `envvar`.
 """
-import argparse
-import os
 import sys
+from enum import Enum
 from pathlib import Path
+from typing import Annotated
 
+import typer
 import uvicorn
 from dotenv import load_dotenv
 from uvicorn.config import STARTUP_FAILURE
 
-from hima_dht_cli import experiment, metrics, patches, replay, services, viewer
+from hima_dht_cli import experiment, patches, services, viewer
 from hima_dht_cli.errors import CommandError
+from hima_dht_cli.metrics import report
+from hima_dht_cli.replay import play
 from hima_dht_cli.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
 from hima_dht_cli.workspace import RUN_ROOT
 from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
 from hima_dht_web import server
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
-DIFFICULTIES = (
-    "VeryEasy", "Easy", "Medium", "MediumHard", "Hard", "Harder",
-    "VeryHard", "CheatVision", "CheatMoney", "CheatInsane",
-)
-RACES = ("Protoss", "Zerg", "Terran")
 
 # Environment keys shared with docker-compose.yml interpolation (.env.example).
 ENV_ADVISOR_HOST = "HIMA_ADVISOR_HOST"
@@ -35,141 +34,158 @@ ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
 ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
 
 
+class Difficulty(str, Enum):
+    """SC2 built-in AI difficulty levels accepted by the game entry."""
+
+    VeryEasy = "VeryEasy"
+    Easy = "Easy"
+    Medium = "Medium"
+    MediumHard = "MediumHard"
+    Hard = "Hard"
+    Harder = "Harder"
+    VeryHard = "VeryHard"
+    CheatVision = "CheatVision"
+    CheatMoney = "CheatMoney"
+    CheatInsane = "CheatInsane"
+
+
+class Race(str, Enum):
+    """SC2 playable races accepted as the enemy race."""
+
+    Protoss = "Protoss"
+    Zerg = "Zerg"
+    Terran = "Terran"
+
+
+app = typer.Typer(
+    add_completion=False,
+    pretty_exceptions_enable=False,
+    help="HIMA experiment automation",
+)
+
+AdvisorPortOption = Annotated[int, typer.Option(envvar=ENV_ADVISOR_PORT)]
+WebuiPortOption = Annotated[int, typer.Option(envvar=ENV_WEBUI_PORT)]
+LeaderModelOption = Annotated[str, typer.Option(envvar=ENV_LEADER_MODEL)]
+
+
 def main() -> int:
     load_dotenv(RUN_ROOT / ".env")
     try:
-        args = _build_parser().parse_args()
-        args.func(args)
+        app()
     except CommandError as error:
         print(f"hima: {error}", file=sys.stderr)
         return 1
     return 0
 
 
-def _env_str(name: str, fallback: str) -> str:
-    return os.environ.get(name, fallback)
+@app.command()
+def setup() -> None:
+    """Run uv sync, apply the site-packages patches, verify imports."""
+    patches.setup()
 
 
-def _env_int(name: str, fallback: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None:
-        return fallback
-    try:
-        return int(raw)
-    except ValueError as error:
-        raise CommandError(f"{name} must be an integer, got {raw!r}") from error
+@app.command()
+def up(
+    port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
+    webui_port: WebuiPortOption = server.DEFAULT_PORT,
+    model: LeaderModelOption = DEFAULT_LEADER_MODEL,
+    skip_pull: Annotated[bool, typer.Option("--skip-pull")] = False,
+) -> None:
+    """Launch advisor, Ollama, and the webui, wait until healthy."""
+    services.up(_service_options(port, webui_port, model), skip_pull)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="hima", description="HIMA experiment automation")
-    sub = parser.add_subparsers(dest="command", required=True)
-    _add_setup(sub)
-    _add_services(sub)
-    _add_run(sub)
-    _add_metrics(sub)
-    _add_viewer(sub)
-    _add_serve(sub)
-    return parser
+@app.command()
+def down() -> None:
+    """Stop services started by hima."""
+    services.down()
 
 
-def _add_setup(sub: "argparse._SubParsersAction") -> None:
-    setup = sub.add_parser("setup", help="uv sync + site-packages patches + import check")
-    setup.set_defaults(func=lambda args: patches.setup())
+@app.command()
+def status(
+    port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
+    webui_port: WebuiPortOption = server.DEFAULT_PORT,
+    model: LeaderModelOption = DEFAULT_LEADER_MODEL,
+) -> None:
+    """Report service, game, and patch state."""
+    services.status(_service_options(port, webui_port, model))
 
 
-def _add_services(sub: "argparse._SubParsersAction") -> None:
-    up = sub.add_parser("up", help="launch advisor, Ollama, and the webui, wait until healthy")
-    _add_service_options(up)
-    up.add_argument("--skip-pull", action="store_true")
-    up.set_defaults(func=lambda args: services.up(_service_options(args), args.skip_pull))
-
-    down = sub.add_parser("down", help="stop services started by hima")
-    down.set_defaults(func=lambda args: services.down())
-
-    status = sub.add_parser("status", help="report service, game, and patch state")
-    _add_service_options(status)
-    status.set_defaults(func=lambda args: services.status(_service_options(args)))
-
-
-def _add_service_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--port", type=int,
-                        default=_env_int(ENV_ADVISOR_PORT, DEFAULT_ADVISOR_PORT))
-    parser.add_argument("--webui-port", type=int,
-                        default=_env_int(ENV_WEBUI_PORT, server.DEFAULT_PORT))
-    parser.add_argument("--model", default=_env_str(ENV_LEADER_MODEL, DEFAULT_LEADER_MODEL))
-
-
-def _service_options(args: argparse.Namespace) -> services.ServiceOptions:
-    return services.ServiceOptions(
-        advisor_port=args.port, webui_port=args.webui_port, model=args.model)
-
-
-def _add_run(sub: "argparse._SubParsersAction") -> None:
-    run = sub.add_parser("run", help="play one game and archive its outputs under runs/")
-    run.add_argument("--difficulty", default="Hard", choices=DIFFICULTIES)
-    run.add_argument("--enemy-race", default="Zerg", choices=RACES)
-    run.add_argument("--seed", type=int, default=3)
-    run.add_argument("--port", type=int, default=_env_int(ENV_ADVISOR_PORT, DEFAULT_ADVISOR_PORT))
-    run.add_argument("--advisor-host", default=_env_str(ENV_ADVISOR_HOST, DEFAULT_ADVISOR_HOST))
-    run.add_argument("--model", default=_env_str(ENV_LEADER_MODEL, DEFAULT_LEADER_MODEL))
-    run.add_argument("--base-url", default=_env_str(ENV_LEADER_BASE_URL, DEFAULT_LEADER_BASE_URL))
-    run.add_argument("--realtime", action="store_true")
-    run.set_defaults(func=_cmd_run)
-
-
-def _cmd_run(args: argparse.Namespace) -> None:
+@app.command()
+def run(
+    difficulty: Annotated[Difficulty, typer.Option()] = Difficulty.Hard,
+    enemy_race: Annotated[Race, typer.Option()] = Race.Zerg,
+    seed: Annotated[int, typer.Option()] = 3,
+    port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
+    advisor_host: Annotated[str, typer.Option(envvar=ENV_ADVISOR_HOST)] = DEFAULT_ADVISOR_HOST,
+    model: LeaderModelOption = DEFAULT_LEADER_MODEL,
+    base_url: Annotated[str, typer.Option(envvar=ENV_LEADER_BASE_URL)] = DEFAULT_LEADER_BASE_URL,
+    realtime: Annotated[bool, typer.Option("--realtime")] = False,
+) -> None:
+    """Play one game and archive its outputs under runs/."""
     experiment.run(experiment.RunOptions(
-        difficulty=args.difficulty,
-        enemy_race=args.enemy_race,
-        seed=args.seed,
-        port=args.port,
-        advisor_host=args.advisor_host,
-        model=args.model,
-        base_url=args.base_url,
-        realtime=args.realtime,
+        difficulty=difficulty.value,
+        enemy_race=enemy_race.value,
+        seed=seed,
+        port=port,
+        advisor_host=advisor_host,
+        model=model,
+        base_url=base_url,
+        realtime=realtime,
     ))
 
 
-def _add_metrics(sub: "argparse._SubParsersAction") -> None:
-    table = sub.add_parser("metrics", help="aggregate metric.json across runs/")
-    table.set_defaults(func=lambda args: metrics.report())
+@app.command()
+def metrics() -> None:
+    """Aggregate metric.json across runs/."""
+    report()
 
 
-def _add_viewer(sub: "argparse._SubParsersAction") -> None:
-    play = sub.add_parser("replay", help="open a replay in the pysc2 renderer")
-    play.add_argument("replay", type=Path)
-    play.set_defaults(func=lambda args: replay.play(args.replay))
-
-    export = sub.add_parser("export", help="export a replay to a standalone HTML viewer")
-    export.add_argument("replay", type=Path)
-    export.add_argument("--sample", type=int, default=DEFAULT_SAMPLE_INTERVAL)
-    export.add_argument("--logs", type=Path, default=None)
-    export.add_argument("-o", "--out", type=Path, default=None)
-    export.set_defaults(func=_cmd_export)
-
-    show = sub.add_parser("view", help="export when needed, then open the HTML viewer")
-    show.add_argument("path", type=Path)
-    show.add_argument("--sample", type=int, default=DEFAULT_SAMPLE_INTERVAL)
-    show.set_defaults(func=lambda args: viewer.view(args.path, args.sample))
+@app.command()
+def replay(replay: Annotated[Path, typer.Argument()]) -> None:
+    """Open a replay in the pysc2 renderer."""
+    play(replay)
 
 
-def _add_serve(sub: "argparse._SubParsersAction") -> None:
-    observe = sub.add_parser("serve", help="serve the game observation web UI")
-    observe.add_argument("--host", default=_env_str(ENV_WEBUI_HOST, server.DEFAULT_HOST))
-    observe.add_argument("--port", type=int, default=_env_int(ENV_WEBUI_PORT, server.DEFAULT_PORT))
-    observe.set_defaults(func=lambda args: _serve(args.host, args.port))
+@app.command()
+def export(
+    replay: Annotated[Path, typer.Argument()],
+    sample: Annotated[int, typer.Option()] = DEFAULT_SAMPLE_INTERVAL,
+    logs: Annotated[Path | None, typer.Option()] = None,
+    out: Annotated[Path | None, typer.Option("--out", "-o")] = None,
+) -> None:
+    """Export a replay to a standalone HTML viewer."""
+    target = viewer.build(viewer.ExportRequest(replay, sample, out, logs))
+    print(f"viewer written: {target}")
+
+
+@app.command()
+def view(
+    path: Annotated[Path, typer.Argument()],
+    sample: Annotated[int, typer.Option()] = DEFAULT_SAMPLE_INTERVAL,
+) -> None:
+    """Export when needed, then open the HTML viewer."""
+    viewer.view(path, sample)
+
+
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option(envvar=ENV_WEBUI_HOST)] = server.DEFAULT_HOST,
+    port: Annotated[int, typer.Option(envvar=ENV_WEBUI_PORT)] = server.DEFAULT_PORT,
+) -> None:
+    """Serve the game observation web UI."""
+    _serve(host, port)
+
+
+def _service_options(port: int, webui_port: int, model: str) -> services.ServiceOptions:
+    return services.ServiceOptions(advisor_port=port, webui_port=webui_port, model=model)
 
 
 def _serve(host: str, port: int) -> None:
-    app = server.create_default_app()
+    web_app = server.create_default_app()
     try:
-        uvicorn.run(app, host=host, port=port)
+        uvicorn.run(web_app, host=host, port=port)
     except SystemExit as error:
         if error.code != STARTUP_FAILURE:
             raise
         raise CommandError(f"cannot serve on {host}:{port}: address already in use") from error
-
-
-def _cmd_export(args: argparse.Namespace) -> None:
-    target = viewer.build(viewer.ExportRequest(args.replay, args.sample, args.out, args.logs))
-    print(f"viewer written: {target}")
