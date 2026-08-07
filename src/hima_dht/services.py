@@ -44,7 +44,7 @@ class ServiceOptions:
 def advisor_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="advisor",
-        argv=[sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)],
+        argv=[sys.executable, "-m", "uvicorn", "hima_dht.app:app", "--host", "127.0.0.1", "--port", str(port)],
         health_url=_advisor_health_url("127.0.0.1", port),
         pid_file=SERVICE_DIR / "advisor.pid",
         log_file=SERVICE_DIR / "advisor.log",

@@ -1,7 +1,7 @@
-import utils
+from hima_dht import actions
 import random
-from bot import HIMA
-from constants import MAP_RAMPS
+from hima_dht.bot import HIMA
+from hima_dht.constants import MAP_RAMPS
 from sc2.position import Point2
 from sc2.ids.buff_id import BuffId
 from sc2.ids.ability_id import AbilityId
@@ -12,7 +12,7 @@ class Terran_Bot(HIMA):
     def __init__(self, args):
         self.warning_range = 10
         self.scout_unit = UnitTypeId.SCV
-        self.troop = utils.Troop(self)
+        self.troop = actions.Troop(self)
         super().__init__(args)
 
     async def unit_attack(self, units):
@@ -156,7 +156,7 @@ class Terran_Bot(HIMA):
                 pending_supply = self.already_pending(UnitTypeId.COMMANDCENTER) * 15 + self.already_pending(UnitTypeId.SUPPLYDEPOT) * 8
                 if self.supply_left > 30 - pending_supply:
                     return self.record_failure(action_id, 'supply_many')
-            res = await self.build(UnitTypeId[tgt.upper()], near=utils.MAP_POINTS[self.start_position])
+            res = await self.build(UnitTypeId[tgt.upper()], near=actions.MAP_POINTS[self.start_position])
             if res:
                 self.record_succeed(action_id)
             else:

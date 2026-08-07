@@ -1,20 +1,20 @@
 import math
-import utils
+from hima_dht import actions
 import random
-from bot import HIMA
+from hima_dht.bot import HIMA
 from sc2.position import Point2
 from sc2.ids.buff_id import BuffId
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.upgrade_id import UpgradeId
 from sc2.ids.unit_typeid import UnitTypeId
-from constants import ABILITYS, CHRONO_PRIORITY
+from hima_dht.constants import ABILITYS, CHRONO_PRIORITY
 
 
 class Protoss_Bot(HIMA):
     def __init__(self, args):
         self.warning_range = 10
         self.scout_unit = UnitTypeId.PROBE
-        self.troop = utils.Troop(self)
+        self.troop = actions.Troop(self)
         super().__init__(args)
 
     async def unit_attack(self, units):

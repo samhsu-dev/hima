@@ -3,13 +3,13 @@ import argparse
 from sc2 import maps
 from datetime import datetime
 from sc2.main import run_game
-from bots.zerg_bot import Zerg_Bot
+from hima_dht.bots.zerg_bot import Zerg_Bot
 from sc2.player import Bot, Computer
 from sc2.data import Race, Difficulty
-from bots.swarmbrain import SwarmBrain
-from bots.terran_bot import Terran_Bot
-from bots.protoss_bot import Protoss_Bot
-from bots.textstarcraft import TextStarCraft
+from hima_dht.bots.swarmbrain import SwarmBrain
+from hima_dht.bots.terran_bot import Terran_Bot
+from hima_dht.bots.protoss_bot import Protoss_Bot
+from hima_dht.bots.textstarcraft import TextStarCraft
 
 
 if __name__ == '__main__':
@@ -57,8 +57,7 @@ if __name__ == '__main__':
     args.difficulty = Difficulty[args.difficulty]
     args.current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    temp_replay_folder = os.path.join(current_dir, args.save_path)
+    temp_replay_folder = os.path.join(str(REPO_ROOT), args.save_path)
     os.makedirs(os.path.join(temp_replay_folder), exist_ok=True)
     temp_replay_path = f'{temp_replay_folder}/{args.current_time}_{args.difficulty}_{args.enemy_race}_temp.SC2Replay'
     if args.own_race == Race.Protoss:

@@ -1,4 +1,4 @@
-from prompts.multi_lm_prompt import *
+from hima_dht.prompts.multi_lm_prompt import *
 
 
 class Prompt:

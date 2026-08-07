@@ -2,13 +2,13 @@ import os
 import re
 import time
 import json
-import utils
+from hima_dht import actions
 import random
 import requests
-import constants
+from hima_dht import constants
 import numpy as np
 from pathlib import Path
-from prompt import Prompt
+from hima_dht.prompt import Prompt
 from openai import OpenAI
 from sc2.data import Race
 from sc2.bot_ai import BotAI
@@ -16,8 +16,8 @@ from collections import deque
 from collections import Counter
 from sc2.ids.unit_typeid import UnitTypeId
 
-from cli.web.records import GameSampler
-from cli.workspace import RECORD_FILE
+from hima_dht.web.records import GameSampler
+from hima_dht.workspace import RECORD_FILE, REPO_ROOT
 
 
 class HIMA(BotAI):
@@ -29,10 +29,10 @@ class HIMA(BotAI):
         self.server = (self.args.seed % self.args.num_server) + self.args.port
 
         self.prompt = Prompt(self.own_race)
-        self.action = utils.ActionDescriptions(self.own_race)
+        self.action = actions.ActionDescriptions(self.own_race)
         self.text_prompt = self.prompt.generate_prompts()
-        self.action_extractor = utils.ActionExtractor(constants.ACTION_DICT[self.own_race], self.own_race)
-        self.game_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.save_path)
+        self.action_extractor = actions.ActionExtractor(constants.ACTION_DICT[self.own_race], self.own_race)
+        self.game_folder = os.path.join(str(REPO_ROOT), args.save_path)
 
         with open(os.path.join(self.game_folder, 'prompt.txt'), "a", encoding='utf-8') as file:
             file.write(f"{self.text_prompt}")
@@ -294,7 +294,7 @@ class HIMA(BotAI):
             return self.record_failure(action_id, 'fail')
 
     def leader_inference(self, user_input):
-        utils.save_data_to_file(user_input, os.path.join(self.game_folder, "input.txt"))
+        actions.save_data_to_file(user_input, os.path.join(self.game_folder, "input.txt"))
         if self.args.LLM_base_url is not None:
             # Qwen3 soft switch: suppress runaway <think> generation on local leaders
             user_input = f"{user_input} /no_think"
@@ -318,7 +318,7 @@ class HIMA(BotAI):
                 print(e)
                 time.sleep(7)
 
-        utils.save_data_to_file(f"{self.time_formatted}\n{response.strip()}", os.path.join(self.game_folder, "output.txt"))
+        actions.save_data_to_file(f"{self.time_formatted}\n{response.strip()}", os.path.join(self.game_folder, "output.txt"))
         # reasoning models emit <think> blocks whose rehearsed text can confuse action extraction
         return re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
 
@@ -357,9 +357,9 @@ class HIMA(BotAI):
             if not hasattr(self, "pbr") and self.supply_used == 200:
                 self.pbr = self.time
         if self.executed_action:
-            utils.save_data_to_file(f"{self.time_formatted} <{self.executed_action}>", os.path.join(self.game_folder, "command.txt"))
+            actions.save_data_to_file(f"{self.time_formatted} <{self.executed_action}>", os.path.join(self.game_folder, "command.txt"))
         if self.failed_action and self.failure_reason != 'not_afford':
-            utils.save_data_to_file(f"{self.time_formatted} <{self.action.dict[self.failed_action]}> {self.failure_reason}", os.path.join(self.game_folder, "command.txt"))
+            actions.save_data_to_file(f"{self.time_formatted} <{self.action.dict[self.failed_action]}> {self.failure_reason}", os.path.join(self.game_folder, "command.txt"))
 
     async def on_start(self):
         self.client.game_step = 1
