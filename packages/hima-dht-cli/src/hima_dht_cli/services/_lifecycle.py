@@ -190,6 +190,7 @@ def _up_native(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
 
 def _up_docker(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
     _docker.compose_up()
+    _verify_published_ollama_port(options.ollama_port)
     _docker.ensure_leader_model(options.model, skip_pull, options.ollama_port)
     containers = _docker.container_names()
     endpoints = _endpoints(options)
@@ -198,6 +199,19 @@ def _up_docker(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
         for name, container in containers.items()
     }
     return _record(ServiceBackend.DOCKER, options, entries)
+
+
+def _verify_published_ollama_port(expected: int) -> None:
+    # Compose interpolation reads only exported env and .env, so an
+    # --ollama-port flag cannot reach docker-compose.yml; the published
+    # binding is the authoritative value.
+    published = _docker.published_ollama_port()
+    if published != expected:
+        raise CommandError(
+            f"compose published ollama on port {published}, not {expected}; the docker "
+            f"backend takes this port from HIMA_OLLAMA_PORT at compose interpolation — "
+            f"export it or set it in .env instead of passing --ollama-port"
+        )
 
 
 def _endpoints(options: ServiceOptions) -> dict[str, str]:

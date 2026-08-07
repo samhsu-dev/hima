@@ -6,6 +6,9 @@ Test cases:
   records a native manifest.
 - test_up_docker_records_container_manifest: the docker backend delegates
   to compose and records container entries with host endpoints.
+- test_up_docker_published_port_divergence_raises: a compose-published
+  ollama port differing from the requested one aborts `up` and points
+  at HIMA_OLLAMA_PORT.
 - test_up_manifest_out_writes_copy: --manifest-out writes the manifest to
   the default location and to the requested path.
 - test_down_docker_stops_compose_and_removes_manifest: a docker manifest
@@ -62,6 +65,7 @@ def test_up_native_ensures_services_in_dependency_order(
 def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
     written: dict[str, services.ServiceManifest] = {}
     monkeypatch.setattr(_docker, "compose_up", lambda: None)
+    monkeypatch.setattr(_docker, "published_ollama_port", lambda: 11434)
     monkeypatch.setattr(_docker, "ensure_leader_model", lambda model, skip_pull, ollama_port: None)
     monkeypatch.setattr(
         _docker,
@@ -82,6 +86,14 @@ def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -
     assert manifest.services["advisor"] == services.DockerService(
         endpoint="http://localhost:8090", container="hima-advisor-1"
     )
+
+
+def test_up_docker_published_port_divergence_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_docker, "compose_up", lambda: None)
+    monkeypatch.setattr(_docker, "published_ollama_port", lambda: 12345)
+
+    with pytest.raises(CommandError, match="HIMA_OLLAMA_PORT"):
+        services.up(services.ServiceOptions(backend=services.ServiceBackend.DOCKER), skip_pull=True)
 
 
 def test_up_manifest_out_writes_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

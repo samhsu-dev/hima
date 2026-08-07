@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 import time
+from typing import cast
 
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import RUN_ROOT
@@ -14,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 # Launch set for the docker backend; order follows the native dependency order.
 COMPOSE_SERVICES = ("ollama", "advisor", "webui")
+
+# Container-side ollama port, fixed by docker-compose.yml.
+CONTAINER_OLLAMA_PORT = 11434
 
 
 def compose_up() -> None:
@@ -32,16 +36,33 @@ def container_names() -> dict[str, str]:
         CommandError: compose lists no container for one of the services.
     """
     output = _read_compose(["ps", "--format", "json", *COMPOSE_SERVICES])
-    names = {}
-    for line in output.splitlines():
-        if not line.strip():
-            continue
-        row = json.loads(line)
-        names[row["Service"]] = row["Name"]
+    names = {row["Service"]: row["Name"] for row in _ps_rows(output)}
     missing = [service for service in COMPOSE_SERVICES if service not in names]
     if missing:
         raise CommandError(f"docker compose ps lists no container for: {', '.join(missing)}")
     return names
+
+
+def published_ollama_port() -> int:
+    """Host port compose actually published for the ollama container.
+
+    Raises:
+        CommandError: compose reports no binding or an unparsable one.
+    """
+    output = _read_compose(["port", "ollama", str(CONTAINER_OLLAMA_PORT)]).strip()
+    try:
+        return int(output.rsplit(":", 1)[1])
+    except (IndexError, ValueError) as error:
+        raise CommandError(
+            f"cannot parse `docker compose port ollama {CONTAINER_OLLAMA_PORT}` output: {output!r}"
+        ) from error
+
+
+def _ps_rows(output: str) -> list[dict[str, str]]:
+    # compose < v2.21 emits one JSON array; newer versions emit NDJSON.
+    if output.lstrip().startswith("["):
+        return cast(list[dict[str, str]], json.loads(output))
+    return [json.loads(line) for line in output.splitlines() if line.strip()]
 
 
 def ensure_leader_model(model: str, skip_pull: bool, ollama_port: int) -> None:
