@@ -15,8 +15,10 @@ HEALTH_PATHS = {"ollama": "/api/tags", "advisor": "/health", "webui": "/api/game
 
 
 def healthy(url: str) -> bool:
+    # Only a non-error status counts: a 404 from a foreign server on the
+    # same port is not a healthy service.
     try:
-        return requests.get(url, timeout=HEALTH_TIMEOUT_S).status_code < 500
+        return requests.get(url, timeout=HEALTH_TIMEOUT_S).ok
     except requests.RequestException:
         return False
 
@@ -38,17 +40,23 @@ def ollama_healthy(root: str) -> bool:
 
 
 def leader_model_present(root: str, model: str) -> bool:
+    # A foreign server on the port may answer 200 with an arbitrary body;
+    # a body that does not parse as an Ollama tag list means absent.
     try:
         response = requests.get(f"{root}/api/tags", timeout=QUERY_TIMEOUT_S)
         response.raise_for_status()
-    except requests.RequestException:
+        names = [entry["name"] for entry in response.json().get("models", [])]
+    except (requests.RequestException, AttributeError, KeyError, TypeError):
         return False
-    names = [entry["name"] for entry in response.json().get("models", [])]
     return any(name == model or name.startswith(f"{model}:") for name in names)
 
 
 def leader_models(base_url: str, api_key: str) -> list[str] | None:
-    """Model ids served at an OpenAI-compatible endpoint; None when unreachable."""
+    """Model ids served at an OpenAI-compatible endpoint.
+
+    None when the endpoint is unreachable or its response is not an
+    OpenAI-compatible model list.
+    """
     try:
         response = requests.get(
             f"{base_url}/models",
@@ -56,6 +64,6 @@ def leader_models(base_url: str, api_key: str) -> list[str] | None:
             timeout=QUERY_TIMEOUT_S,
         )
         response.raise_for_status()
-    except requests.RequestException:
+        return [entry["id"] for entry in response.json().get("data", [])]
+    except (requests.RequestException, AttributeError, KeyError, TypeError):
         return None
-    return [entry["id"] for entry in response.json().get("data", [])]
