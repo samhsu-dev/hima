@@ -66,18 +66,17 @@ The default path is typically: C:\Program Files (x86)\StarCraft II\Maps<br>
 **First**, install dependencies.
 
 ```sh
-git clone git@github.com:snumprlab/HIMA.git
-conda create -n hima python=3.10
-conda activate hima
-# install HIMA
+git clone git@github.com:samhsu-dev/hima.git
 cd hima
-pip install burnysc2 openai requests
+# install the uv workspace (all members) and apply site-packages patches
+uv sync
+uv run hima setup
 ```
 
 ---
 
 **Second**, set your OpenAI API key to enable LLM-based agent reasoning.<br>
-You can pass your API key as a command-line argument when running `python -m hima_dht.game`.<br>
+You can pass your API key as a command-line argument when running `python -m hima_dht_game`.<br>
 `--LLM_api_key YOUR_API_KEY`
 
 ---
@@ -85,10 +84,10 @@ You can pass your API key as a command-line argument when running `python -m him
 **Third**, download our imitation-based agent from Hugging Face and launch it as a local server.  
 👉 Model URL: [https://huggingface.co/SNUMPR/Protoss-a](https://huggingface.co/SNUMPR/Protoss-a)
 
-Refer to `src/hima_dht/app.py` for an example of how to serve the model using **FastAPI**.  
+Refer to `packages/hima-dht-game/src/hima_dht_game/advisor.py` for an example of how to serve the model using **FastAPI**.  
 The server runs on `localhost`, and the default port is `8080`.
 
-You can change the port by passing the following argument to `python -m hima_dht.game`:  
+You can change the port by passing the following argument to `python -m hima_dht_game`:  
 `--port YOUR_PORT`
 
 ---
@@ -115,7 +114,7 @@ For example:
 
 ### Game mode
 
-You can run the game in two different modes by setting the `--mode` argument of `python -m hima_dht.game`:
+You can run the game in two different modes by setting the `--mode` argument of `python -m hima_dht_game`:
 - **Agent vs BotAI**:  
   Run your agent against the built-in StarCraft II AI.  
   Use: `--mode bot`
