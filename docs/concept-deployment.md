@@ -2,19 +2,23 @@
 
 ## 1. Context
 
-**Problem Statement** — Experiments must reproduce across devices, but the parts have
-unequal portability: Python dependencies lock cleanly, model services containerize
-cleanly, while StarCraft II and Apple-silicon inference resist containers. The
-deployment layer states what runs where and how the parts reach each other.
+**Problem Statement** — Experiments must reproduce on any device with no cloud
+dependency: the game headless in a container, the leader and advisor models served
+locally. The parts have unequal portability — Python dependencies lock cleanly and
+model services containerize cleanly, while retail StarCraft II and Apple-silicon
+inference resist containers — so the fully containerized stack is the reference
+placement and the host-native game is a development placement.
 
-**System Role** — Deployment layer: packages every portable part as a container image
-built from the locked environment, and names the host-native placements for the rest.
+**System Role** — Deployment layer: packages every part as a container image built
+from the locked environment, and names the host-native development placements that
+remain outside it.
 
 **Data Flow**
 - **Inputs:** the locked environment (one lock file for all platforms), advisor model
   weights, leader model weights, the StarCraft II program.
-- **Outputs:** running advisor and leader services; on Linux, a containerized game
-  runtime; archives reachable by the observation subsystem.
+- **Outputs:** running advisor and leader services; a containerized game runtime on
+  any device (amd64 emulation on Apple silicon); archives reachable by the
+  observation subsystem.
 - **Connections:** game process → advisor service; game process → leader service;
   observation server → run archive.
 
@@ -30,12 +34,12 @@ built from the locked environment, and names the host-native placements for the 
 **Conceptual Diagram**
 
 ```
-macOS device                          Linux device
-  game process (native, retail 5.0.16)  game container (headless 4.10)
+Any device (reference)                macOS device (development)
+  game container (headless 4.10)        game process (native, retail 5.0.16)
       |            \                        |            \
       v             v                       v             v
   advisor service   leader service      advisor service   leader service
-  (container/native)(container/native)  (container)       (container)
+  (container)       (container)         (container/native)(container/native)
 ```
 
 **Core Concepts**
@@ -61,11 +65,13 @@ macOS device                          Linux device
     distributed through a registry.
 
 - **Name:** Game runtime placement
-  - **Definition:** Where the game process and StarCraft II run: native on macOS with
-    the retail client, or containerized on Linux with the headless client.
+  - **Definition:** Where the game process and StarCraft II run: containerized with
+    the headless client on any device (the reference placement), or native on macOS
+    with the retail client (a development placement).
   - **Scope:** The two clients differ in game version and balance; results from one
     placement are not comparable with results from the other. The headless client is
-    x86-only and requires the user's license acceptance.
+    x86-only and requires the user's license acceptance; the ladder map is not
+    redistributable, so each device supplies it from a retail installation.
   - **Relationships:** Either placement reaches the advisor and leader services over
     the service network; both produce archives the observation subsystem reads.
 
@@ -93,11 +99,12 @@ macOS device                          Linux device
 
 ## 4. Scenarios
 
-- **Typical:** On the macOS device, the game runs native for Apple-silicon inference
-  and retail-version fidelity; the advisor and leader run as containers or natively.
-- **Boundary:** A Linux server runs everything containerized with the headless client;
-  its results feed development and regression checks, not version-sensitive
-  comparisons with retail runs.
+- **Typical:** Any device runs the full containerized stack — headless game, advisor,
+  and leader — and one compose invocation reproduces an experiment; runs compare with
+  other containerized runs.
+- **Boundary:** The macOS device runs the game native for Apple-silicon inference and
+  retail-version fidelity; those runs are version-sensitive and compare only with
+  other retail runs.
 - **Interaction:** A new device clones the repository, restores the locked
   environment, pulls the baked leader image, and replays an archived game without any
   model download.
