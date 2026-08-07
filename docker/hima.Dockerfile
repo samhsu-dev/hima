@@ -1,22 +1,41 @@
-# One Python runtime for every hima service; each compose service sets its
-# own command (design-deployment.md). Built from the committed lock only —
-# no dependency resolution at build time.
+# One parameterized image for every hima Python service: the PACKAGE build
+# argument selects the workspace member, EXTRA optionally adds one of its
+# extras (design-deployment.md). Built from the committed lock only — no
+# dependency resolution at build time.
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
 
+ARG PACKAGE
+ARG EXTRA=""
+RUN test -n "${PACKAGE}" || { \
+      echo "build arg PACKAGE required: the workspace member to install"; \
+      exit 1; }
+
 WORKDIR /app
 
-# Dependency layer from lock + pyproject alone, so source edits never bust it.
+# Dependency layer from the lock and member metadata alone, so source edits
+# never bust it. Workspace discovery needs every member's pyproject.toml.
+COPY pyproject.toml uv.lock /app/
+COPY packages/hima-dht-records/pyproject.toml /app/packages/hima-dht-records/
+COPY packages/hima-dht-game/pyproject.toml /app/packages/hima-dht-game/
+COPY packages/hima-dht-web/pyproject.toml /app/packages/hima-dht-web/
+COPY packages/hima-dht-cli/pyproject.toml /app/packages/hima-dht-cli/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev
+    uv sync --frozen --package "${PACKAGE}" --no-default-groups \
+      --no-install-workspace ${EXTRA:+--extra "${EXTRA}"}
 
-COPY . /app
+COPY packages /app/packages
 
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --package "${PACKAGE}" --no-default-groups \
+      ${EXTRA:+--extra "${EXTRA}"}
 
-# Land the three site-packages patches inside the image venv.
-RUN --mount=type=cache,target=/root/.cache/uv uv run hima setup
+# Only the cli closure ships pysc2/s2protocol; land their site-packages
+# patches with the venv interpreter directly — `hima setup` would re-sync
+# the full default closure into a pruned image.
+RUN if [ "${PACKAGE}" = "hima-dht-cli" ]; then \
+      /app/.venv/bin/python -c "from hima_dht_cli.patches import apply_patches; print('\n'.join(apply_patches()))" \
+      && /app/.venv/bin/python -c "import sc2, pysc2, s2protocol, mpyq"; \
+    fi
 
 ENV PATH="/app/.venv/bin:$PATH"

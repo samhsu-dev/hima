@@ -2,13 +2,13 @@
 # data (tmp/, runs/) reaches containers as bind mounts, never baked in.
 .venv/
 .git/
-.pytest_cache/
-.DS_Store
-__pycache__/
+**/.pytest_cache/
+**/.DS_Store
+**/__pycache__/
+**/tests/
 tmp/
 runs/
 docs/
-tests/
 image.png
-*.SC2Replay
-*.viewer.html
+**/*.SC2Replay
+**/*.viewer.html

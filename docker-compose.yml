@@ -18,10 +18,13 @@ name: hima
 
 services:
   advisor:
-    build: &hima-image
+    build:
       context: .
       dockerfile: docker/hima.Dockerfile
-    image: hima
+      args:
+        PACKAGE: hima-dht-game
+        EXTRA: advisor
+    image: hima-advisor
     command: uvicorn --factory hima_dht_game.advisor:create_default_app --host 0.0.0.0 --port 8090
     environment:
       HF_HOME: /models
@@ -41,9 +44,13 @@ services:
       start_period: 600s
 
   webui:
-    build: *hima-image
-    image: hima
-    command: hima serve --host 0.0.0.0
+    build:
+      context: .
+      dockerfile: docker/hima.Dockerfile
+      args:
+        PACKAGE: hima-dht-web
+    image: hima-webui
+    command: uvicorn --factory hima_dht_web.server:create_default_app --host 0.0.0.0 --port 8123
     ports:
       - "${HIMA_WEBUI_PORT:-8123}:8123"
     volumes:
