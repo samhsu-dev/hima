@@ -2,13 +2,13 @@ import os
 import re
 import time
 import json
-from hima_dht import actions
+from hima_dht_game import actions
 import random
 import requests
-from hima_dht import constants
+from hima_dht_game import constants
 import numpy as np
 from pathlib import Path
-from hima_dht.prompt import Prompt
+from hima_dht_game.prompt import Prompt
 from openai import OpenAI
 from sc2.data import Race
 from sc2.bot_ai import BotAI
@@ -16,7 +16,7 @@ from collections import deque
 from collections import Counter
 from sc2.ids.unit_typeid import UnitTypeId
 
-from hima_dht.sampler import GameSampler
+from hima_dht_game.sampler import GameSampler
 from hima_dht_records import RECORD_FILE
 
 

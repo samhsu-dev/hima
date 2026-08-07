@@ -14,7 +14,7 @@ from sc2.sc2process import SC2Process
 from sc2.unit import Unit
 
 from hima_dht.errors import CommandError
-from hima_dht.sampler import GameSampler
+from hima_dht_game.sampler import GameSampler
 from hima_dht_records import fold_records
 
 OBSERVED_PLAYER_ID = 1

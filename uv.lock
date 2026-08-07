@@ -13,6 +13,7 @@ resolution-markers = [
 [manifest]
 members = [
     "hima-dht",
+    "hima-dht-game",
     "hima-dht-records",
 ]
 overrides = [{ name = "s2clientprotocol", marker = "sys_platform == 'never'" }]
@@ -635,6 +636,7 @@ dependencies = [
     { name = "accelerate" },
     { name = "burnysc2" },
     { name = "fastapi" },
+    { name = "hima-dht-game" },
     { name = "hima-dht-records" },
     { name = "mpyq" },
     { name = "numpy" },
@@ -663,6 +665,7 @@ requires-dist = [
     { name = "accelerate", specifier = "==1.14.0" },
     { name = "burnysc2", specifier = "==7.3.0" },
     { name = "fastapi", specifier = "==0.141.1" },
+    { name = "hima-dht-game", editable = "packages/hima-dht-game" },
     { name = "hima-dht-records", editable = "packages/hima-dht-records" },
     { name = "mpyq", specifier = "==0.2.5" },
     { name = "numpy", specifier = "==2.5.1" },
@@ -683,6 +686,27 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+
+[[package]]
+name = "hima-dht-game"
+version = "0.1.0"
+source = { editable = "packages/hima-dht-game" }
+dependencies = [
+    { name = "burnysc2" },
+    { name = "hima-dht-records" },
+    { name = "numpy" },
+    { name = "openai" },
+    { name = "requests" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "burnysc2", specifier = "==7.3.0" },
+    { name = "hima-dht-records", editable = "packages/hima-dht-records" },
+    { name = "numpy", specifier = "==2.5.1" },
+    { name = "openai", specifier = "==2.53.0" },
+    { name = "requests", specifier = "==2.34.2" },
+]
 
 [[package]]
 name = "hima-dht-records"

@@ -11,7 +11,7 @@ Test cases:
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from hima_dht.sampler import GameSampler
+from hima_dht_game.sampler import GameSampler
 from hima_dht_records import fold_records
 
 

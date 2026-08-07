@@ -1,6 +1,6 @@
 import json
 from sc2.data import Race
-from hima_dht.constants import ACTION_DICT
+from hima_dht_game.constants import ACTION_DICT
 
 
 def get_action_list(race):

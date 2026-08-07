@@ -22,6 +22,7 @@ dependencies = [
     "psutil==7.2.2",
     "python-dotenv==1.2.2",
     "hima-dht-records",
+    "hima-dht-game",
 ]
 
 [project.scripts]
@@ -40,6 +41,7 @@ override-dependencies = [
 
 [tool.uv.sources]
 hima-dht-records = { workspace = true }
+hima-dht-game = { workspace = true }
 # Linux images run the advisor on CPU; macOS keeps the PyPI MPS wheel.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 

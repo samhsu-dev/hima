@@ -1,0 +1,19 @@
+[project]
+name = "hima-dht-game"
+version = "0.1.0"
+description = "StarCraft II game runtime: game entry, HIMA bot, baselines, record sampling"
+requires-python = ">=3.12"
+dependencies = [
+    "burnysc2==7.3.0",
+    "numpy==2.5.1",
+    "openai==2.53.0",
+    "requests==2.34.2",
+    "hima-dht-records",
+]
+
+[tool.uv.sources]
+hima-dht-records = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

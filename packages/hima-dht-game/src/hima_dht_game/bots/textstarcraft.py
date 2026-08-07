@@ -9,7 +9,7 @@ import numpy as np
 from openai import OpenAI
 from collections import deque
 from sc2.bot_ai import BotAI
-from hima_dht.prompts.agent_prompt import *
+from hima_dht_game.prompts.agent_prompt import *
 from typing import Set, List
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.buff_id import BuffId

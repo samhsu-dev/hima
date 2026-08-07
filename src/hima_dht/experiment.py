@@ -50,7 +50,7 @@ def _leader_root(base_url: str) -> str:
 
 def _invoke_game(options: RunOptions) -> None:
     argv = [
-        sys.executable, "-m", "hima_dht.game", "--mode", "bot",
+        sys.executable, "-m", "hima_dht_game", "--mode", "bot",
         # --num_server 1 keeps bot.py's advisor port (seed % num_server + port)
         # equal to --port for every seed; hima manages a single advisor server.
         "--num_server", "1",
@@ -67,7 +67,7 @@ def _invoke_game(options: RunOptions) -> None:
         argv.append("--realtime")
     completed = subprocess.run(argv, cwd=RUN_ROOT)
     if completed.returncode != 0:
-        raise CommandError(f"hima_dht.game exited with code {completed.returncode}")
+        raise CommandError(f"hima_dht_game exited with code {completed.returncode}")
 
 
 def _newest_replay(existing: set[Path]) -> Path:

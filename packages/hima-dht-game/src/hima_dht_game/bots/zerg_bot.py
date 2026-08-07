@@ -1,8 +1,8 @@
 import math
-from hima_dht import actions
+from hima_dht_game import actions
 import random
-from hima_dht.bot import HIMA
-from hima_dht.constants import MAP_RAMPS
+from hima_dht_game.bot import HIMA
+from hima_dht_game.constants import MAP_RAMPS
 from sc2.position import Point2
 from sc2.data import ActionResult
 from sc2.ids.buff_id import BuffId

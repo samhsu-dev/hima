@@ -1,5 +1,5 @@
 import re
-from hima_dht.constants import ACTION_DICT, MAP_POINTS
+from hima_dht_game.constants import ACTION_DICT, MAP_POINTS
 
 
 class ActionExtractor:

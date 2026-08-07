@@ -1,18 +1,21 @@
-import os
+"""Game entry: argument parsing and one game launch."""
 import argparse
-from sc2 import maps
+import os
 from datetime import datetime
+
+from sc2 import maps
+from sc2.data import Difficulty, Race
 from sc2.main import run_game
-from hima_dht.bots.zerg_bot import Zerg_Bot
 from sc2.player import Bot, Computer
-from sc2.data import Race, Difficulty
-from hima_dht.bots.swarmbrain import SwarmBrain
-from hima_dht.bots.terran_bot import Terran_Bot
-from hima_dht.bots.protoss_bot import Protoss_Bot
-from hima_dht.bots.textstarcraft import TextStarCraft
+
+from hima_dht_game.bots.protoss_bot import Protoss_Bot
+from hima_dht_game.bots.swarmbrain import SwarmBrain
+from hima_dht_game.bots.terran_bot import Terran_Bot
+from hima_dht_game.bots.textstarcraft import TextStarCraft
+from hima_dht_game.bots.zerg_bot import Zerg_Bot
 
 
-if __name__ == '__main__':
+def main() -> None:
     parser = argparse.ArgumentParser(description='StarCraft II agent')
     parser.add_argument('--port', default=8080, type=int)
     parser.add_argument('--num_server', default=3, type=int)
@@ -37,13 +40,13 @@ if __name__ == '__main__':
         choices=['Protoss', 'Zerg', 'Terran']
     )
     parser.add_argument(
-        '--difficulty', default='Hard', 
+        '--difficulty', default='Hard',
         choices=[
             'VeryEasy', 'Easy', 'Medium', 'MediumHard', 'Hard', 'Harder',
             'VeryHard', 'CheatVision', 'CheatMoney', 'CheatInsane'
         ]
     )
-    
+
     # if mode is agent
     parser.add_argument(
         '--enemy_agent',
