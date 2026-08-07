@@ -311,6 +311,13 @@ class HIMA(BotAI):
             {"role": "user", "content": user_input}
         ]
 
+        # Start record at INFO: the call blocks the game clock for up to
+        # minutes and can die mid-flight; while it runs, this is the only
+        # sign of life the log stream has.
+        logger.info(
+            "leader call starting: leader=%s model=%s",
+            self.args.LLM_base_url, self.args.LLM_api_text,
+        )
         started = time.monotonic()
         attempts = 0
         while True:
@@ -346,6 +353,7 @@ class HIMA(BotAI):
             "temperature": self.args.temperature
         }
         advisor_url = f"http://{self.args.advisor_host}:{self.server}/infer"
+        logger.info("advisor call starting: url=%s", advisor_url)
         started = time.monotonic()
         r = requests.post(advisor_url, json=user_input)
         r.raise_for_status()
