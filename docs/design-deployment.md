@@ -68,7 +68,7 @@ services, and their interfaces. No classes; components only.
 | Service | Image | Command | Ports | Data |
 |---------|-------|---------|-------|------|
 | `advisor` | advisor | `uvicorn --factory hima_dht_game.app:create_default_app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
-| `ollama` | ollama pinned | default | none (compose network) | `ollama` volume |
+| `ollama` | ollama pinned | default | `${HIMA_OLLAMA_PORT:-11434}` | `ollama` volume |
 | `leader-baked` | leader baked | default | 11434 | weights in image |
 | `webui` | webui | `uvicorn --factory hima_dht_web.server:create_default_app --host 0.0.0.0 --port 8123` | 8123 | `./runs`, `./tmp` bind mounts (read-only) |
 | `game` | game | `hima run`, configured via `HIMA_*` environment | none | `./runs`, `./tmp` bind mounts (read-write) |
@@ -81,12 +81,19 @@ services, and their interfaces. No classes; components only.
   prerequisite services only (`ollama`/`leader-baked`, `advisor`, `webui`). The
   `game` service is a one-shot job in the run lifecycle: launched per game via
   the `game` profile, exits with the run, never managed by `up`/`down`.
-- `ollama` and `leader-baked` are compose-network alternatives for the same
-  role, selected by pointing `HIMA_LEADER_BASE_URL` at their service name;
-  the `baked` profile builds the weights into the image. Only `leader-baked`
-  publishes 11434 — its profile is explicit opt-in — while the
-  default-profile `ollama` publishes nothing, leaving the host port to the
-  native server `hima up` manages.
+- `hima up --backend native|docker` (`HIMA_SERVICE_BACKEND`, default native)
+  selects where the trio runs: native host processes, or these compose
+  services via `docker compose up -d --wait`. Every successful `up` records
+  its ownership in `tmp/services/manifest.toml`; `down`/`status` operate on
+  the recorded backend (`design-cli.md`). Both backends serve the same host
+  ports, so they are exclusive per port: `up` fails explicitly when an
+  endpoint is answered by a process it does not own — never a silent skip.
+- `ollama` publishes `${HIMA_OLLAMA_PORT:-11434}` so the host reaches the
+  containerized leader (the docker service backend); move the port to run it
+  beside a native server. `ollama` and `leader-baked` are alternatives for
+  the same role — the `baked` profile (explicit opt-in, fixed 11434 publish)
+  builds the weights into the image; a compose-network game selects either
+  by pointing `HIMA_LEADER_BASE_URL` at the service name.
 - `advisor` serves `GET /health`, ready only after model loading completes; the
   host-side health precheck polls it.
 - `game` carries no command flags: its compose `environment` block sets the

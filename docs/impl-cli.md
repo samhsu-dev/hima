@@ -26,18 +26,32 @@ vendor documentation.
   as choices; a bool option with an explicit `"--realtime"` name suppresses the
   `--no-realtime` pair; `Annotated[T, typer.Option(...)]` is the documented
   parameter style.
+- **[tomli-w]** `tomli_w.dumps(doc)` — nested dicts become `[section]` /
+  `[section.sub]` tables; round-trips with stdlib `tomllib.loads` (verified);
+  `None` values are unsupported — omit absent keys instead.
+- **[docker compose]** `docker compose ps --format json` — NDJSON, one object
+  per line with `Service` and `Name` keys (verified against compose 5.1.2);
+  `up -d --wait` blocks on healthchecks (services without one wait for
+  running) and needs no extra timeout — healthcheck retries bound it.
+- **[ollama]** `OLLAMA_HOST=127.0.0.1:<port>` — environment consumed by both
+  `ollama serve` (bind address) and the `ollama pull` client (target server).
 
 ## Libraries
 
 - python-dotenv==1.2.2 — `.env` loading at the CLI entry point. `uv add python-dotenv`.
 - typer==0.27.1 — CLI parsing, env-backed option defaults. `uv add typer`;
   already in `uv.lock` transitively via transformers at the same version.
+- tomli-w==1.2.0 — service manifest TOML writing (stdlib `tomllib` reads).
+  `uv add --package hima-dht-cli tomli-w`.
 
 ## Developer instructions
 
 - `.env` is read from `REPO_ROOT`, the same file docker compose interpolates;
   precedence: CLI flag > exported environment > `.env` > code default.
 - Environment keys the entry point reads: `HIMA_ADVISOR_HOST`, `HIMA_ADVISOR_PORT`,
-  `HIMA_WEBUI_HOST`, `HIMA_WEBUI_PORT`, `HIMA_LEADER_MODEL`, `HIMA_LEADER_BASE_URL`.
+  `HIMA_WEBUI_HOST`, `HIMA_WEBUI_PORT`, `HIMA_LEADER_MODEL`, `HIMA_LEADER_BASE_URL`,
+  `HIMA_SERVICE_BACKEND`, `HIMA_OLLAMA_PORT`.
+- `docker compose` subprocesses run with `cwd=RUN_ROOT`; the docker backend
+  requires `docker-compose.yml` in the run root.
 - Core modules never read `os.environ`; env-backed values enter through typer
   `envvar` option declarations in `cli` only (`rules/code/constants.md`).

@@ -8,30 +8,40 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 ## Design Overview
 
-- **Classes**: `ServiceSpec`, `ServiceOptions`, `ReplayExporter`, `CommandError`
+- **Classes**: `ServiceSpec`, `ServiceOptions`, `ServiceBackend`,
+  `ServiceManifest`, `NativeService`, `DockerService`, `ReplayExporter`,
+  `CommandError`
 - **Modules**: `cli` (typer application: one typed command function per
-  subcommand), `workspace` (run layout), `services`, `pysc2_play`,
+  subcommand), `workspace` (run layout), `services` (package: public entry
+  `services/__init__`, internal submodules `_lifecycle`, `_native`, `_docker`,
+  `_manifest`, `_health`), `pysc2_play`,
   `experiment`, `metrics`, `replay`, `export`, `viewer`. The observation webui
   is the separate member `hima-dht-web` (`design-observation.md`).
 - **Relationships**: `cli` dispatches to every command module (one-way).
   `viewer` uses `export` (frame data) and `hima_dht_web.logs` (decision and
   command parsing). `export` uses `hima_dht_game.sampler` (record file written
   during re-simulation) and `hima_dht_records` (folding).
-  `experiment` uses `services` (health precheck) and `workspace`. `services`
-  contains `ServiceSpec` and uses `hima_dht_web.server` (webui default port and
+  `experiment` uses `services` (health precheck) and `workspace`. Inside
+  `services`, `_lifecycle` uses `_native`, `_docker`, `_manifest`, and
+  `_health`; `_native` and `_docker` use `_health`; `_native` contains
+  `ServiceSpec`; `_manifest` contains `ServiceBackend` and the manifest data
+  holders. `services` uses `hima_dht_web.server` (webui default port and
   app factory for the managed webui). `export` contains `ReplayExporter`. All
   command modules use `workspace`.
 - **Abstract**: `sc2.observer_ai.ObserverAI` (implemented by `ReplayExporter`)
 - **Exceptions**: `CommandError` extends `Exception`, raised by every command module,
   handled only in `cli`
-- **Dependency roles**: Data holders: `ServiceSpec`, `ServiceOptions`.
-  Orchestrator: `cli.main`. Helpers: all command modules (stateless functions).
+- **Dependency roles**: Data holders: `ServiceSpec`, `ServiceOptions`,
+  `ServiceManifest`, `NativeService`, `DockerService`.
+  Orchestrators: `cli.main`; `services._lifecycle` (backend dispatch).
+  Helpers: all command modules (stateless functions).
 - **Defaults**: `cli` loads `.env` from the working directory on entry;
   argument defaults resolve as CLI flag > exported environment > `.env` >
   code default. Environment lookup is declared per option (typer `envvar`);
   no hand-rolled resolution or conversion. The `HIMA_*` keys are shared with
-  docker compose interpolation (`.env.example`). Closed value sets
-  (difficulty, race) are enums. Core modules never read the environment;
+  docker compose interpolation (`.env.example`); `HIMA_SERVICE_BACKEND` and
+  `HIMA_OLLAMA_PORT` join them for `up`/`status`. Closed value sets
+  (difficulty, race, service backend) are enums. Core modules never read the environment;
   they receive resolved values.
 - **Run layout**: `workspace` anchors `tmp/`, `runs/`, and the service state
   directory to the invoking process's working directory (`RUN_ROOT`); `hima`
@@ -45,19 +55,42 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 ## Class / Type Specifications
 
-### ServiceSpec (`services`)
-- **Responsibility**: Describe one managed background service.
+### ServiceSpec (`services._native`)
+- **Responsibility**: Describe one natively spawned background service.
 - **Fields**: `name: str`, `argv: list[str]`, `health_url: str`,
-  `pid_file: Path`, `log_file: Path`, `process_keyword: str`.
+  `pid_file: Path`, `log_file: Path`, `process_keyword: str`,
+  `env: Mapping[str, str]` (extra spawn environment; Ollama's bind address).
 - **Methods**: none (data holder). `process_keyword` guards `down`: a stored PID is
   killed only when its command line contains this keyword.
 
-### ServiceOptions (`services`)
-- **Responsibility**: Endpoint and model selection for the managed services,
-  resolved by `cli` and passed as one parameter object.
-- **Fields**: `advisor_port: int`, `webui_port: int`, `model: str` — each
-  defaulting to the owning module's constant.
+### ServiceOptions (`services._lifecycle`)
+- **Responsibility**: Backend, endpoint, and model selection for the managed
+  services, resolved by `cli` and passed as one parameter object.
+- **Fields**: `backend: ServiceBackend`, `advisor_port: int`,
+  `webui_port: int`, `ollama_port: int`, `model: str` — each defaulting to
+  the owning module's constant.
 - **Methods**: none (data holder).
+
+### ServiceBackend (`services._manifest`)
+- **Responsibility**: Closed value set naming where the managed services run —
+  `NATIVE` (host processes with pid files) or `DOCKER` (compose services).
+  Persisted in the manifest so `down`/`status` operate on the recorded
+  backend, never on port probing.
+
+### ServiceManifest / NativeService / DockerService (`services._manifest`)
+- **Responsibility**: Record of what `up` started, written to
+  `tmp/services/manifest.toml` on every successful `up` (`--manifest-out`
+  writes a copy); the ownership source for `down` and `status`.
+- **Fields**: `ServiceManifest` — `backend: ServiceBackend`, `created: str`
+  (ISO timestamp), `leader_model: str`, `leader_endpoint: str` (the
+  OpenAI-compatible URL of the leader engine `up` ensures; a
+  `HIMA_LEADER_BASE_URL` override may point games elsewhere),
+  `services: dict[str, NativeService | DockerService]`.
+  `NativeService` — `endpoint: str`, `pid: int`, `pid_file: str`,
+  `log_file: str`. `DockerService` — `endpoint: str` (host-published),
+  `container: str`.
+- **Methods**: none (data holders). TOML write via `tomli-w`, read via
+  `tomllib`; the manifest-level `backend` discriminates the entry type.
 
 ### ReplayExporter (`export`)
 - **Responsibility**: Step through a replay via the SC2 engine and record sampled
@@ -87,19 +120,31 @@ Each command module exposes one public entry consumed by `cli`.
   subprocess of `replay`; site-packages carries no patches, so `uv sync`
   never needs a follow-up step. s2protocol's Python 3.12 breakage is left
   alone: no code path imports it.
-- **up(options, skip_pull) -> None** (`services`) — Behavior: ensure the managed
-  services in dependency order — `ollama serve`, the leader model (pulled when
-  absent unless `skip_pull`), the advisor FastAPI server (`uvicorn --factory` on
-  `hima_dht_game.app`), the
-  observation webui (`uvicorn --factory` on `hima_dht_web.server`) — skipping any service
-  already healthy; poll health endpoints a bounded number of attempts.
-  Errors: `CommandError` when health is not reached within the attempt bound.
-- **down() -> None** (`services`) — Behavior: terminate PIDs recorded in pid files in
-  reverse launch order (webui, advisor, ollama) after verifying the process command
-  line matches `process_keyword`; never touches other processes. Output: per-service
-  status lines.
-- **status(options) -> None** (`services`) — Behavior: report advisor health, webui
-  health, Ollama health, leader model presence, and SC2 installation path.
+- **up(options, skip_pull, manifest_out) -> None** (`services`) — Behavior:
+  dispatch on `options.backend`. `NATIVE`: ensure the services in dependency
+  order — `ollama serve` (bound to `ollama_port` via `OLLAMA_HOST`), the
+  leader model (host `ollama pull` when absent unless `skip_pull`), the
+  advisor FastAPI server (`uvicorn --factory` on `hima_dht_game.app`), the
+  observation webui (`uvicorn --factory` on `hima_dht_web.server`); each
+  ensure is ownership-aware — an owned live pid (pid file + matching command
+  line) short-circuits, while an endpoint answering without an owned pid is
+  a foreign server and raises. `DOCKER`: `docker compose up -d --wait` on
+  ollama/advisor/webui, leader model presence via the published port, pull
+  via `docker compose exec ollama ollama pull`, container names from
+  `docker compose ps`. Both paths write the manifest; `manifest_out` writes
+  a copy. Errors: `CommandError` when health is not reached within the
+  attempt bound, on a foreign endpoint, on a compose failure, or when the
+  model is absent under `skip_pull`.
+- **down() -> None** (`services`) — Behavior: read the manifest; backend
+  `DOCKER` → `docker compose stop` of the recorded services; backend
+  `NATIVE` or no manifest → terminate PIDs recorded in pid files in
+  reverse launch order (webui, advisor, ollama) after verifying the process
+  command line matches `process_keyword`; never touches other processes.
+  Removes the manifest.
+- **status(options) -> None** (`services`) — Behavior: report the manifest
+  (backend and creation time, or its absence), then advisor health, webui
+  health, Ollama health at `ollama_port`, leader model presence, and SC2
+  installation path.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
   Behavior: precheck the advisor health endpoint and the leader endpoint's
   OpenAI-compatible model list (`GET {base_url}/models` with the bearer key —
@@ -139,5 +184,7 @@ Each command module exposes one public entry consumed by `cli`.
 ## Exception / Error Types
 
 - `CommandError(Exception)` — raised by command modules on any user-facing failure
-  (missing file, unhealthy service, subprocess failure). `cli` catches it, prints
+  (missing file, unhealthy service, subprocess failure, a service endpoint
+  answered by a process hima does not own, a failed `docker compose`
+  invocation, a corrupt manifest). `cli` catches it, prints
   the message to stderr, exits 1. All other exceptions propagate with traceback.

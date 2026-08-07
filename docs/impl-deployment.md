@@ -141,11 +141,14 @@
 - Measured on the M4 Pro host: the containerized CPU Ollama never finishes a
   qwen3:8b leader completion inside the openai client's 600 s timeout; native
   Ollama (Metal) answers the same call in 29.5 s.
-- The compose `ollama` service publishes no host port: host 11434 belongs to
-  the native Ollama that `hima up` manages, and a published 11434 would
-  shadow its health check into skipping the native start. The game container
-  reaches the native server as `http://host.docker.internal:11434/v1`
-  (OrbStack and Docker Desktop forward that name to the host loopback).
+- The compose `ollama` service publishes `${HIMA_OLLAMA_PORT:-11434}` so the
+  host reaches the containerized leader (`hima up --backend docker`). The
+  same port cannot host both backends: the manifest records which backend
+  owns it, native `up` fails explicitly when the endpoint answers without an
+  owned pid, and compose fails the publish with a bind error when a native
+  server holds the port. The game container reaches the native server as
+  `http://host.docker.internal:11434/v1` (OrbStack and Docker Desktop
+  forward that name to the host loopback).
 - The game service passes configuration only through its compose
   `environment` block — container-context defaults plus `${HIMA_*}` .env
   interpolation. Command flags there would permanently outrank every .env
