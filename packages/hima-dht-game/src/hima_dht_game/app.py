@@ -5,6 +5,7 @@ loads its models in the application lifespan, so the server accepts requests
 only once every advisor is ready.
 """
 import asyncio
+import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Mapping, Protocol
@@ -13,9 +14,18 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from starlette.types import Lifespan
 
-# The published SNUMPR checkpoints the advisor serves; fixed by the paper's
-# fine-tuned Terran suggestion trio.
+# The published SNUMPR checkpoints the advisor serves; the paper's
+# fine-tuned Terran suggestion trio is the default.
 MODEL_TRIO = ("SNUMPR/Terran-a", "SNUMPR/Terran-b", "SNUMPR/Terran-c")
+ENV_ADVISOR_MODELS = "HIMA_ADVISOR_MODELS"
+
+
+def model_trio() -> tuple[str, ...]:
+    """Model names the default app serves: HIMA_ADVISOR_MODELS
+    (comma-separated) when set, else the published trio."""
+    raw = os.environ.get(ENV_ADVISOR_MODELS, "")
+    names = tuple(name.strip() for name in raw.split(",") if name.strip())
+    return names or MODEL_TRIO
 
 
 class Query(BaseModel):
@@ -101,7 +111,7 @@ def create_app(advisors: Mapping[str, Advisor], lifespan: Lifespan[FastAPI] | No
 
 
 def create_default_app() -> FastAPI:
-    """Build the app whose lifespan loads the SNUMPR model trio."""
+    """Build the app whose lifespan loads the configured model trio."""
     advisors: dict[str, Advisor] = {}
 
     @asynccontextmanager
@@ -109,7 +119,7 @@ def create_default_app() -> FastAPI:
         # PyTorch MPS segfaults on concurrent generate() calls; one worker
         # serializes model access.
         executor = ThreadPoolExecutor(max_workers=1)
-        for index, name in enumerate(MODEL_TRIO):
+        for index, name in enumerate(model_trio()):
             advisors[str(index)] = ModelAdvisor(name, executor)
         yield
         executor.shutdown()

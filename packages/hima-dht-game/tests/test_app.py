@@ -7,10 +7,14 @@ Test cases:
 - test_infer_single_returns_model_text: /infer/{model_id} returns that
   advisor's text.
 - test_infer_unknown_model_returns_404: unknown model id maps to 404.
+- test_model_trio_defaults_to_published_checkpoints: no env -> SNUMPR trio.
+- test_model_trio_reads_environment: HIMA_ADVISOR_MODELS overrides the trio.
+- test_model_trio_ignores_blank_environment: blank env value -> default trio.
 """
+import pytest
 from fastapi.testclient import TestClient
 
-from hima_dht_game.app import Query, create_app
+from hima_dht_game.app import ENV_ADVISOR_MODELS, MODEL_TRIO, Query, create_app, model_trio
 
 
 class FakeAdvisor:
@@ -51,3 +55,21 @@ def test_infer_unknown_model_returns_404() -> None:
     response = make_client().post("/infer/9", json={"prompt": "hi"})
 
     assert response.status_code == 404
+
+
+def test_model_trio_defaults_to_published_checkpoints(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(ENV_ADVISOR_MODELS, raising=False)
+
+    assert model_trio() == MODEL_TRIO
+
+
+def test_model_trio_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ENV_ADVISOR_MODELS, "org/tank-a, org/tank-b ,org/tank-c")
+
+    assert model_trio() == ("org/tank-a", "org/tank-b", "org/tank-c")
+
+
+def test_model_trio_ignores_blank_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ENV_ADVISOR_MODELS, " , ")
+
+    assert model_trio() == MODEL_TRIO

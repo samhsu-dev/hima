@@ -59,8 +59,10 @@ the contracts between them. Per-member internals: `design-cli.md`,
   root. Advisor — `uvicorn --factory hima_dht_game.app:create_default_app`;
   models load in the application lifespan: import stays side-effect free and
   `/health` reachability still implies readiness.
-- **Value placement**: the model trio is a constant (no run overrides it);
-  no new run-settings.
+- **Value placement**: the model trio is a run-setting — `model_trio()`
+  reads `HIMA_ADVISOR_MODELS` (comma-separated names) at the
+  `create_default_app` entry point, defaulting to the published `MODEL_TRIO`
+  constant. Core routes receive the built advisors, never the environment.
 - **Third-party closure**: burnysc2, numpy, openai, requests; `advisor`
   extra adds fastapi, uvicorn, pydantic, transformers, torch, accelerate.
 

@@ -28,6 +28,8 @@ services:
     command: uvicorn --factory hima_dht_game.app:create_default_app --host 0.0.0.0 --port 8090
     environment:
       HF_HOME: /models
+      # Empty value falls through to the in-code default trio.
+      HIMA_ADVISOR_MODELS: ${HIMA_ADVISOR_MODELS:-}
     ports:
       # Published ports interpolate from .env (.env.example); the container-
       # internal ports stay fixed so service-name endpoints never change.
