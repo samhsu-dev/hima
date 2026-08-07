@@ -106,7 +106,7 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
 - `src/hima_dht/export.py` — `ReplayExporter` drives a `GameSampler` writing `frames.jsonl`
   beside the replay's logs, then folds it; the exported page is unchanged.
 - `src/hima_dht/workspace.py` — `frames.jsonl` joins `GAME_OUTPUTS` so `hima run` archives it.
-- `src/hima_dht/main.py` — new `serve` subcommand (`--host`, `--port`).
+- `src/hima_dht/cli.py` — new `serve` subcommand (`--host`, `--port`).
 
 ## Exception / Error Types
 

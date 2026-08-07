@@ -12,7 +12,7 @@ services, and their interfaces. No classes; components only.
 - **Relationships**: `game` uses `advisor` and `ollama` by service name (one-way).
   `webui` reads the host's `runs/` and `tmp/` bind mounts. `advisor` and `webui`
   build from the `hima` image; `game` builds from the `hima` image.
-- **Build inputs**: `pyproject.toml` + `uv.lock` (locked environment), `app.py`,
+- **Build inputs**: `pyproject.toml` + `uv.lock` (locked environment),
   `src/hima_dht/`, StarCraft II Linux package (user-provided license acceptance).
 
 ## Image Specifications
@@ -45,7 +45,7 @@ services, and their interfaces. No classes; components only.
 
 | Service | Image | Command | Ports | Data |
 |---------|-------|---------|-------|------|
-| `advisor` | hima | `uvicorn app:app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
+| `advisor` | hima | `uvicorn hima_dht.app:app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
 | `ollama` | ollama pinned | default | 11434 | `ollama` volume |
 | `leader-baked` | leader baked | default | 11434 | weights in image |
 | `webui` | hima | `hima serve --host 0.0.0.0` | 8123 | `./runs`, `./tmp` bind mounts (read-only) |
@@ -57,8 +57,8 @@ services, and their interfaces. No classes; components only.
   host-side health precheck polls it.
 - `game` passes `--advisor-host advisor` and `--base-url http://ollama:11434/v1`;
   the host-native game keeps the localhost defaults. This requires the advisor host
-  to become an argument: `main.py --advisor_host` (default `localhost`), consumed by
-  `bot.py` when building the inference URL, forwarded by `hima run --advisor-host`.
+  to become an argument: `hima_dht.game --advisor_host` (default `localhost`), consumed
+  by `bot.py` when building the inference URL, forwarded by `hima run --advisor-host`.
 
 ## Exception / Error Handling
 

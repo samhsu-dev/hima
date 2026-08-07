@@ -77,7 +77,7 @@ pip install burnysc2 openai requests
 ---
 
 **Second**, set your OpenAI API key to enable LLM-based agent reasoning.<br>
-You can pass your API key as a command-line argument when running main.py.<br>
+You can pass your API key as a command-line argument when running `python -m hima_dht.game`.<br>
 `--LLM_api_key YOUR_API_KEY`
 
 ---
@@ -85,10 +85,10 @@ You can pass your API key as a command-line argument when running main.py.<br>
 **Third**, download our imitation-based agent from Hugging Face and launch it as a local server.  
 👉 Model URL: [https://huggingface.co/SNUMPR/Protoss-a](https://huggingface.co/SNUMPR/Protoss-a)
 
-Refer to `app.py` for an example of how to serve the model using **FastAPI**.  
+Refer to `src/hima_dht/app.py` for an example of how to serve the model using **FastAPI**.  
 The server runs on `localhost`, and the default port is `8080`.
 
-You can change the port by passing the following argument to `main.py`:  
+You can change the port by passing the following argument to `python -m hima_dht.game`:  
 `--port YOUR_PORT`
 
 ---
@@ -115,7 +115,7 @@ For example:
 
 ### Game mode
 
-You can run the game in two different modes by setting the `--mode` argument in `main.py`:
+You can run the game in two different modes by setting the `--mode` argument of `python -m hima_dht.game`:
 - **Agent vs BotAI**:  
   Run your agent against the built-in StarCraft II AI.  
   Use: `--mode bot`

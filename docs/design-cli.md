@@ -79,7 +79,7 @@ Each command module exposes one public entry consumed by `cli`.
   Errors: `CommandError` when a target file is missing.
 - **up(options, skip_pull) -> None** (`services`) — Behavior: ensure the managed
   services in dependency order — `ollama serve`, the leader model (pulled when
-  absent unless `skip_pull`), the advisor FastAPI server (`uvicorn app:app`), the
+  absent unless `skip_pull`), the advisor FastAPI server (`uvicorn hima_dht.app:app`), the
   observation webui (`uvicorn --factory` on `web.server`) — skipping any service
   already healthy; poll health endpoints a bounded number of attempts.
   Errors: `CommandError` when health is not reached within the attempt bound.
@@ -90,14 +90,14 @@ Each command module exposes one public entry consumed by `cli`.
 - **status(options) -> None** (`services`) — Behavior: report advisor health, webui
   health, Ollama health, leader model presence, SC2 installation path, and patch state.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
-  Behavior: precheck services, invoke `main.py` with `--num_server 1` (keeps the
+  Behavior: precheck services, invoke `hima_dht.game` with `--num_server 1` (keeps the
   advisor port independent of `--seed`), stream its output, then archive
   `tmp/{command,input,output,prompt}.txt`, `metric.json`, `frames.jsonl`, and the
   result-named replay into `runs/<replay-stem>/`, and print the metric summary.
   Input: difficulty, enemy race, seed, port, advisor host (default `localhost`,
-  forwarded as `main.py --advisor_host` for containerized runs), leader model,
+  forwarded as `hima_dht.game --advisor_host` for containerized runs), leader model,
   base URL, realtime flag.
-  Errors: `CommandError` on unhealthy services or non-zero exit of `main.py`.
+  Errors: `CommandError` on unhealthy services or non-zero exit of `hima_dht.game`.
 - **metrics() -> None** (`metrics`) — Behavior: read every `runs/*/metric.json`
   plus an unarchived `tmp/metric.json`, print one aligned table
   (result, time, agent_call, apu, rur, pbr). Errors: none; empty set prints a hint.
