@@ -46,9 +46,10 @@
 - Blizzard map packs (`.../MapPacks/<name>.zip`, same password) end at Ladder 2019
   Season 3 — Ancient Cistern LE (2023) is not in them.
 - Map source: the retail install's `/Applications/StarCraft II/Maps/Ancient Cistern
-  LE.SC2Map`, copied into the image's `Maps/`. Compatibility of a 2023 map with the
-  4.10 client is still unverified: the first containerized run crashed in SC2
-  startup, before map load (see Rosetta incompatibility below).
+  LE.SC2Map`, copied into the image's lowercase `maps/`. The SC2 Linux server
+  resolves the relative map path burnysc2 sends against `<root>/maps`; a map in
+  the zip's capital `Maps/` fails CreateGame with `InvalidMapPath`. burnysc2's
+  `Paths.MAPS` also prefers lowercase `maps` when it exists.
 - SC2 4.10 under OrbStack's Rosetta amd64 emulation crashes at startup: after
   "Creating stub renderer..." it prints "unable to parse listen address." /
   "Failed to initialize port" and dies with signal 11. Reproduced with single-

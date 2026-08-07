@@ -29,6 +29,8 @@ RUN cd /root/StarCraftII/Versions/Base75689 \
  && install -m 755 /tmp/sc2-wrapper.sh SC2_x64 \
  && rm /tmp/sc2-wrapper.sh
 
-COPY ["maps/Ancient Cistern LE.SC2Map", "/root/StarCraftII/Maps/"]
+# Lowercase maps/: the SC2 Linux server resolves the relative map path
+# against <root>/maps, not the zip's Maps/ (impl-deployment.md).
+COPY ["maps/Ancient Cistern LE.SC2Map", "/root/StarCraftII/maps/"]
 
 ENV SC2PATH=/root/StarCraftII
