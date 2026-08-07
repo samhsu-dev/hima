@@ -12,10 +12,12 @@ services, and their interfaces. No classes; components only.
   Member mapping: `design-packages.md`.
 - **Services** (`docker-compose.yml`): `advisor`, `ollama`, `leader-baked` (profile
   `baked`), `webui`, `game` (profile `game`)
-- **Relationships**: `game` uses `advisor` and `ollama` by service name (one-way).
-  `webui` reads the host's `runs/` and `tmp/` bind mounts. `advisor` and `webui`
-  build from `hima.Dockerfile` with their member selected; `game` builds from
-  the cli image.
+- **Relationships**: `game` uses `advisor` by service name (one-way); the
+  leader is an OpenAI-compatible URL (`HIMA_LEADER_BASE_URL`), defaulting to
+  the host's native Ollama through the container-to-host name. `webui` reads
+  the host's `runs/` and `tmp/` bind mounts. `advisor` and `webui` build from
+  `hima.Dockerfile` with their member selected; `game` builds from the cli
+  image.
 - **Build inputs**: root `pyproject.toml` + `uv.lock` (locked workspace),
   `packages/` (member metadata and sources), StarCraft II Linux package
   (user-provided license acceptance).
@@ -65,10 +67,10 @@ services, and their interfaces. No classes; components only.
 | Service | Image | Command | Ports | Data |
 |---------|-------|---------|-------|------|
 | `advisor` | advisor | `uvicorn --factory hima_dht_game.app:create_default_app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
-| `ollama` | ollama pinned | default | 11434 | `ollama` volume |
+| `ollama` | ollama pinned | default | none (compose network) | `ollama` volume |
 | `leader-baked` | leader baked | default | 11434 | weights in image |
 | `webui` | webui | `uvicorn --factory hima_dht_web.server:create_default_app --host 0.0.0.0 --port 8123` | 8123 | `./runs`, `./tmp` bind mounts (read-only) |
-| `game` | game | `hima run` with service-name endpoints | none | `./runs`, `./tmp` bind mounts (read-write) |
+| `game` | game | `hima run`, configured via `HIMA_*` environment | none | `./runs`, `./tmp` bind mounts (read-write) |
 
 - The webui factory and `hima run` anchor the run layout to the working
   directory (`design-packages.md`); each service's `WORKDIR` is the directory
@@ -78,14 +80,22 @@ services, and their interfaces. No classes; components only.
   prerequisite services only (`ollama`/`leader-baked`, `advisor`, `webui`). The
   `game` service is a one-shot job in the run lifecycle: launched per game via
   the `game` profile, exits with the run, never managed by `up`/`down`.
-- `ollama` and `leader-baked` are alternatives on the same port; `baked` profile
-  selects the second.
+- `ollama` and `leader-baked` are compose-network alternatives for the same
+  role, selected by pointing `HIMA_LEADER_BASE_URL` at their service name;
+  the `baked` profile builds the weights into the image. Only `leader-baked`
+  publishes 11434 — its profile is explicit opt-in — while the
+  default-profile `ollama` publishes nothing, leaving the host port to the
+  native server `hima up` manages.
 - `advisor` serves `GET /health`, ready only after model loading completes; the
   host-side health precheck polls it.
-- `game` passes `--advisor-host advisor` and `--base-url http://ollama:11434/v1`;
-  the host-native game keeps the localhost defaults. This requires the advisor host
-  to become an argument: `hima_dht_game --advisor_host` (default `localhost`), consumed
-  by the bot when building the inference URL, forwarded by `hima run --advisor-host`.
+- `game` carries no command flags: its compose `environment` block sets the
+  container-context values (`HIMA_ADVISOR_HOST=advisor`; leader URL default
+  `http://host.docker.internal:11434/v1`) and forwards `.env` overrides via
+  `${HIMA_*}` interpolation, keeping the CLI precedence chain (flag >
+  environment > .env > default) intact. The host-native game keeps the
+  localhost defaults. The advisor host is an argument: `hima_dht_game
+  --advisor_host` (default `localhost`), consumed by the bot when building
+  the inference URL, forwarded by `hima run --advisor-host`.
 
 ## Exception / Error Handling
 
