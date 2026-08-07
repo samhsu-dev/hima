@@ -87,13 +87,13 @@ services:
     ports:
       - "11434:11434"
 
-  # Containerized game (experimental): SC2 4.10 headless under amd64
-  # emulation on Apple silicon; results are not comparable with retail
-  # 5.0.16 runs. Requires the default ollama form (the leader endpoint is
-  # the ollama service name). Build steps: docker/game.Dockerfile header.
+  # Containerized game (experimental): SC2 4.10 headless; only the SC2
+  # binary runs under amd64 emulation (qemu-user) on non-x86_64 hosts.
+  # Results are not comparable with retail 5.0.16 runs. Requires the
+  # default ollama form (the leader endpoint is the ollama service name).
+  # Build steps: docker/game.Dockerfile header.
   game:
     profiles: ["game"]
-    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/game.Dockerfile

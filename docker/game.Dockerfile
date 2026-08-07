@@ -1,15 +1,16 @@
 # The cli member image plus the StarCraft II Linux headless client (4.10)
-# and the ladder map from maps/. linux/amd64 only (design-deployment.md).
-# Build the cli base for that platform, then this image with the license
-# acceptance:
-#   docker build --platform linux/amd64 -t hima-cli:amd64 \
-#     --build-arg PACKAGE=hima-dht-cli -f docker/hima.Dockerfile .
+# and the ladder map from maps/. The image is native-platform; only SC2_x64
+# runs under amd64 emulation via qemu-user (design-deployment.md).
+#   docker build -t hima-cli --build-arg PACKAGE=hima-dht-cli \
+#     -f docker/hima.Dockerfile .
 #   SC2_LICENSE=<acceptance> docker compose --profile game build game
-ARG HIMA_IMAGE=hima-cli:amd64
+ARG HIMA_IMAGE=hima-cli
 FROM ${HIMA_IMAGE}
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+RUN dpkg --add-architecture amd64 \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl unzip qemu-user libc6:amd64 libstdc++6:amd64 \
  && rm -rf /var/lib/apt/lists/*
 
 # The unzip password is Blizzard's AI and Machine Learning License
@@ -21,6 +22,12 @@ RUN test -n "${SC2_LICENSE}" || { \
 RUN curl -fSL https://blzdistsc2-a.akamaihd.net/Linux/SC2.4.10.zip -o /tmp/SC2.zip \
  && unzip -q -P "${SC2_LICENSE}" /tmp/SC2.zip -d /root \
  && rm /tmp/SC2.zip
+
+COPY docker/sc2-wrapper.sh /tmp/sc2-wrapper.sh
+RUN cd /root/StarCraftII/Versions/Base75689 \
+ && mv SC2_x64 SC2_x64.real \
+ && install -m 755 /tmp/sc2-wrapper.sh SC2_x64 \
+ && rm /tmp/sc2-wrapper.sh
 
 COPY ["maps/Ancient Cistern LE.SC2Map", "/root/StarCraftII/Maps/"]
 
