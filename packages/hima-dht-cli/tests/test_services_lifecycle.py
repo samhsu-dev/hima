@@ -12,6 +12,10 @@ Test cases:
   routes `down` to compose stop and removes the manifest.
 - test_down_without_manifest_sweeps_native_in_reverse_order: no manifest
   sweeps webui, advisor, then ollama pid files.
+- test_status_probes_manifest_endpoints: status builds every probe URL
+  and the leader root from the recorded manifest, not from options.
+- test_status_flags_foreign_endpoint_with_dead_pid: a reachable endpoint
+  whose recorded pid is gone fails the check as a foreign process.
 """
 
 from pathlib import Path
@@ -116,3 +120,77 @@ def test_down_without_manifest_sweeps_native_in_reverse_order(
     services.down()
 
     assert stopped == ["webui", "advisor", "ollama"]
+
+
+def _docker_manifest(ollama_endpoint: str) -> services.ServiceManifest:
+    return services.ServiceManifest(
+        backend=services.ServiceBackend.DOCKER,
+        created="2026-08-07T12:00:00+09:00",
+        leader_model="qwen3:8b",
+        leader_endpoint=f"{ollama_endpoint}/v1",
+        services={
+            "ollama": services.DockerService(endpoint=ollama_endpoint, container="hima-ollama-1"),
+            "advisor": services.DockerService(
+                endpoint="http://localhost:8090", container="hima-advisor-1"
+            ),
+            "webui": services.DockerService(
+                endpoint="http://localhost:8080", container="hima-webui-1"
+            ),
+        },
+    )
+
+
+def test_status_probes_manifest_endpoints(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    probed: list[str] = []
+    roots: list[str] = []
+
+    def fake_healthy(url: str) -> bool:
+        probed.append(url)
+        return True
+
+    def fake_present(root: str, model: str) -> bool:
+        roots.append(root)
+        return True
+
+    manifest = _docker_manifest("http://localhost:12345")
+    monkeypatch.setattr(_lifecycle, "read_manifest", lambda: manifest)
+    monkeypatch.setattr(_lifecycle, "healthy", fake_healthy)
+    monkeypatch.setattr(_lifecycle, "leader_model_present", fake_present)
+    monkeypatch.setattr(_lifecycle, "SC2_APP", tmp_path)
+
+    assert services.status(services.ServiceOptions()) is True
+    assert probed == [
+        "http://localhost:8090/health",
+        "http://localhost:8080/api/games",
+        "http://localhost:12345/api/tags",
+    ]
+    assert roots == ["http://localhost:12345"]
+
+
+def test_status_flags_foreign_endpoint_with_dead_pid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A pid far above the platform pid limit is guaranteed dead.
+    manifest = services.ServiceManifest(
+        backend=services.ServiceBackend.NATIVE,
+        created="2026-08-07T12:00:00+09:00",
+        leader_model="qwen3:8b",
+        leader_endpoint="http://localhost:11434/v1",
+        services={
+            "ollama": services.NativeService(
+                endpoint="http://localhost:11434",
+                pid=4_194_304,
+                pid_file="tmp/services/ollama.pid",
+                log_file="tmp/services/ollama.log",
+            )
+        },
+    )
+    monkeypatch.setattr(_lifecycle, "read_manifest", lambda: manifest)
+    monkeypatch.setattr(_lifecycle, "healthy", lambda url: True)
+    monkeypatch.setattr(_lifecycle, "leader_model_present", lambda root, model: True)
+    monkeypatch.setattr(_lifecycle, "SC2_APP", tmp_path)
+
+    assert services.status(services.ServiceOptions()) is False
+    assert "foreign process" in capsys.readouterr().out

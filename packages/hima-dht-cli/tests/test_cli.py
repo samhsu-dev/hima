@@ -19,6 +19,8 @@ Test cases:
   HIMA_ADVISOR_PORT exits 2 with a usage error naming the variable.
 - test_command_error_prints_message_and_exits_one: a CommandError from a
   command prints `hima: <message>` to stderr and main() returns 1.
+- test_status_failing_check_exits_one: `hima status` exits 1 when any
+  check fails.
 - test_serve_bound_port_raises_command_error: serving on a bound port
   raises CommandError instead of exiting the process.
 """
@@ -126,6 +128,14 @@ def test_command_error_prints_message_and_exits_one(
 
     assert cli.main() == 1
     assert "hima: boom" in capsys.readouterr().err
+
+
+def test_status_failing_check_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(services, "status", lambda options: False)
+
+    result = runner.invoke(cli.app, ["status"])
+
+    assert result.exit_code == 1
 
 
 def test_serve_bound_port_raises_command_error() -> None:

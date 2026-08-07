@@ -15,7 +15,7 @@ import psutil
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import RUN_ROOT, SERVICE_DIR
 
-from ._health import advisor_health_url, healthy, leader_model_present, ollama_url
+from ._health import HEALTH_PATHS, advisor_health_url, healthy, leader_model_present, ollama_url
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def webui_spec(port: int) -> ServiceSpec:
             "--port",
             str(port),
         ],
-        health_url=f"http://127.0.0.1:{port}/api/games",
+        health_url=f"http://127.0.0.1:{port}{HEALTH_PATHS['webui']}",
         pid_file=SERVICE_DIR / "webui.pid",
         log_file=SERVICE_DIR / "webui.log",
         process_keyword="uvicorn",
@@ -92,7 +92,7 @@ def ollama_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="ollama",
         argv=["ollama", "serve"],
-        health_url=f"{ollama_url(port)}/api/tags",
+        health_url=f"{ollama_url(port)}{HEALTH_PATHS['ollama']}",
         pid_file=SERVICE_DIR / "ollama.pid",
         log_file=SERVICE_DIR / "ollama.log",
         process_keyword="ollama",

@@ -9,6 +9,10 @@ HEALTH_TIMEOUT_S = 2
 # Model listing parses a JSON body, slightly slower than a liveness probe.
 QUERY_TIMEOUT_S = 3
 
+# Health probe path per managed service, fixed by each server's API.
+# Service specs and status checks build their probe URLs from this table.
+HEALTH_PATHS = {"ollama": "/api/tags", "advisor": "/health", "webui": "/api/games"}
+
 
 def healthy(url: str) -> bool:
     try:
@@ -18,7 +22,7 @@ def healthy(url: str) -> bool:
 
 
 def advisor_health_url(host: str, port: int) -> str:
-    return f"http://{host}:{port}/health"
+    return f"http://{host}:{port}{HEALTH_PATHS['advisor']}"
 
 
 def advisor_healthy(host: str, port: int) -> bool:
@@ -30,7 +34,7 @@ def ollama_url(port: int) -> str:
 
 
 def ollama_healthy(root: str) -> bool:
-    return healthy(f"{root}/api/tags")
+    return healthy(f"{root}{HEALTH_PATHS['ollama']}")
 
 
 def leader_model_present(root: str, model: str) -> bool:

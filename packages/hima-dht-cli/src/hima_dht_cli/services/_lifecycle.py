@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import psutil
+
 from hima_dht_cli.workspace import SC2_APP
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 
 from . import _docker, _native
-from ._health import healthy, leader_model_present, ollama_url
+from ._health import HEALTH_PATHS, healthy, leader_model_present, ollama_url
 from ._manifest import (
     MANIFEST_FILE,
     DockerService,
@@ -68,8 +70,13 @@ def down() -> None:
     remove_manifest()
 
 
-def status(options: ServiceOptions) -> None:
-    """Print the manifest record and one reachability line per prerequisite."""
+def status(options: ServiceOptions) -> bool:
+    """Print the manifest record and one line per check; True when all pass.
+
+    Raises:
+        CommandError: the recorded manifest is corrupt or has an
+            unreadable version.
+    """
     manifest = read_manifest()
     if manifest is None:
         print("manifest: none (`hima up` has not recorded services)")
@@ -78,26 +85,59 @@ def status(options: ServiceOptions) -> None:
             f"manifest: backend={manifest.backend.value} "
             f"created={manifest.created} ({MANIFEST_FILE})"
         )
-    for name, ok, detail in _collect_checks(options):
+    checks = _collect_checks(options, manifest)
+    for name, ok, detail in checks:
         mark = "✓" if ok else "✗"
         print(f"{mark} {name}: {detail}")
+    return all(ok for _, ok, _ in checks)
 
 
-def _collect_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
-    advisor_url = _native.advisor_spec(options.advisor_port).health_url
-    webui_url = _native.webui_spec(options.webui_port).health_url
-    ollama_root = ollama_url(options.ollama_port)
-    return [
-        ("advisor", healthy(advisor_url), advisor_url),
-        ("webui", healthy(webui_url), webui_url),
-        ("ollama", healthy(f"{ollama_root}/api/tags"), ollama_root),
-        (
-            "leader model",
-            leader_model_present(ollama_root, options.model),
-            options.model,
-        ),
-        ("StarCraft II", SC2_APP.exists(), str(SC2_APP)),
+def _collect_checks(
+    options: ServiceOptions, manifest: ServiceManifest | None
+) -> list[tuple[str, bool, str]]:
+    # The manifest is the source of truth for what `up` started; options
+    # only fill in when no `up` has recorded services.
+    if manifest is None:
+        endpoints = _endpoints(options)
+        entries: dict[str, NativeService | DockerService] = {}
+        model = options.model
+    else:
+        endpoints = {name: entry.endpoint for name, entry in manifest.services.items()}
+        entries = dict(manifest.services)
+        model = manifest.leader_model
+    ollama_root = endpoints.get("ollama", ollama_url(options.ollama_port))
+    checks = [
+        _service_check(name, endpoints.get(name), entries.get(name))
+        for name in ("advisor", "webui", "ollama")
     ]
+    checks.append(("leader model", leader_model_present(ollama_root, model), model))
+    checks.append(("StarCraft II", SC2_APP.exists(), str(SC2_APP)))
+    return checks
+
+
+def _service_check(
+    name: str, endpoint: str | None, entry: NativeService | DockerService | None
+) -> tuple[str, bool, str]:
+    if endpoint is None:
+        return (name, False, "not recorded in the manifest")
+    health = f"{endpoint}{HEALTH_PATHS[name]}"
+    if isinstance(entry, NativeService):
+        return _native_check(name, health, entry)
+    if isinstance(entry, DockerService):
+        return (name, healthy(health), f"{health} container={entry.container}")
+    return (name, healthy(health), health)
+
+
+def _native_check(name: str, health: str, entry: NativeService) -> tuple[str, bool, str]:
+    # A reachable endpoint with a dead recorded pid is a foreign process
+    # shadowing the service, not a healthy service.
+    reachable = healthy(health)
+    alive = psutil.pid_exists(entry.pid)
+    if reachable and not alive:
+        detail = f"{health} answers but recorded pid {entry.pid} is gone (foreign process)"
+        return (name, False, detail)
+    suffix = "" if alive else " (exited)"
+    return (name, reachable and alive, f"{health} pid={entry.pid}{suffix}")
 
 
 def _up_native(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:

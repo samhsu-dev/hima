@@ -139,8 +139,8 @@ def status(
     ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
 ) -> None:
-    """Report service and game state."""
-    services.status(
+    """Report service and game state; exit 1 when a check fails."""
+    ok = services.status(
         services.ServiceOptions(
             advisor_port=port,
             webui_port=webui_port,
@@ -148,6 +148,8 @@ def status(
             model=model,
         )
     )
+    if not ok:
+        raise typer.Exit(code=1)
 
 
 @app.command()
