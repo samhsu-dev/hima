@@ -64,9 +64,15 @@
   exec the binary directly with `-L`. An `-L` prefix must not contain absolute
   symlinks that escape it (Ubuntu's `/lib64/ld-linux-x86-64.so.2` does; replace
   with a copy).
-- Containerized game on Apple silicon therefore requires either an amd64 host or
-  an arm64 game image that execs only `SC2_x64` through qemu-user — a
-  `design-deployment.md` revision pending user confirmation.
+- Confirmed design: the game image is arm64-native and execs only `SC2_x64`
+  through qemu-user (`design-deployment.md`, emulation boundary).
+- `ldd` on `SC2_x64` (amd64 game image): libdl, libpthread, librt, libstdc++,
+  libm, libgcc_s, libc + ld-linux — all covered by `libc6:amd64` +
+  `libstdc++6:amd64` (libgcc-s1 arrives as a dependency).
+- Debian multiarch (`dpkg --add-architecture amd64`) places those libs at the
+  canonical paths (`/lib/x86_64-linux-gnu`, `/lib64/ld-linux-x86-64.so.2`), so
+  `qemu-x86_64` needs no `-L` prefix.
+- The `qemu-user` Debian package provides `/usr/bin/qemu-x86_64`.
 
 ## Developer instructions
 
@@ -74,11 +80,10 @@
 - No image patches site-packages: the pysc2 compatibility fixes apply
   in-process when `hima replay` spawns `hima_dht_cli.pysc2_play`.
 - Compose: default profile = advisor + ollama + webui; `--profile baked` swaps the
-  leader; `--profile game` adds the containerized game (linux/amd64 only).
-- `FROM` of a local tag ignores the requested build platform, so the game image
-  needs a separate amd64 base tag:
-  `docker build --platform linux/amd64 -t hima-cli:amd64 --build-arg
-  PACKAGE=hima-dht-cli -f docker/hima.Dockerfile .`.
+  leader; `--profile game` adds the containerized game.
+- The game image builds `FROM` the native-platform cli tag:
+  `docker build -t hima-cli --build-arg PACKAGE=hima-dht-cli
+  -f docker/hima.Dockerfile .`; no platform override anywhere.
 - Compose forwards `SC2_LICENSE` from the environment (`${SC2_LICENSE:-}`); an
   empty value fails the guard layer naming the argument before any download.
 - Compose `${VAR:-default}` interpolation reads the `.env` beside

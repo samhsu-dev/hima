@@ -38,13 +38,23 @@ services, and their interfaces. No classes; components only.
 
 ### game (`docker/game.Dockerfile`)
 - **Responsibility**: The cli image plus the StarCraft II Linux headless client
-  (4.10) and the ladder map Ancient Cistern LE from `maps/`.
-- **Base**: the cli member image built with `--platform linux/amd64`,
-  consumed via the `HIMA_IMAGE` build argument.
+  (4.10), the ladder map Ancient Cistern LE from `maps/`, and the emulation
+  boundary that runs only the SC2 binary under amd64 emulation.
+- **Base**: the cli member image on the build host's native platform, consumed
+  via the `HIMA_IMAGE` build argument. Python and the game runtime execute
+  natively; no whole-container emulation.
+- **Emulation boundary**: `SC2_x64` is a wrapper script that execs the real
+  binary (`SC2_x64.real`, same directory) through `qemu-x86_64` on non-x86_64
+  hosts and directly on x86_64. burnysc2 spawns the wrapper unchanged; `exec`
+  keeps the process id it kills. The amd64 runtime libraries (libc, libstdc++)
+  install via Debian multiarch at their canonical paths, so the wrapper needs
+  no library-prefix argument.
 - **Build argument**: the license-acceptance string unpacking Blizzard's archive;
   no default value — the build fails until the user supplies it.
-- **Constraint**: `linux/amd64` only; on Apple silicon it runs emulated and slow.
-  Results are not comparable with retail 5.0.16 runs (`concept-deployment.md`).
+- **Constraint**: whole-container amd64 emulation on Apple silicon is forbidden —
+  Rosetta crashes SC2 at port initialization (`impl-deployment.md`). qemu-user
+  TCG is slow; acceptable because games are LLM-bound. Results are not
+  comparable with retail 5.0.16 runs (`concept-deployment.md`).
 
 ### leader baked (`docker/leader.Dockerfile`)
 - **Responsibility**: ollama image with qwen3:8b pulled at build time; version pinned
