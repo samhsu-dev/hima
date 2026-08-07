@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 
 # Upstream HIMA's fixed pause before retrying a failed leader call.
 LEADER_RETRY_DELAY_S = 7
+# Bounds one leader generation on local reasoning models, which can ignore
+# /no_think and decode tens of thousands of <think> tokens (observed: 18k+
+# tokens, 10 minutes, ended by client timeout). Legitimate responses stay
+# under ~1.6k tokens; hosted leaders keep upstream's uncapped call.
+LEADER_MAX_COMPLETION_TOKENS = 4096
 
 
 class HIMA(BotAI):
@@ -320,13 +325,20 @@ class HIMA(BotAI):
         )
         started = time.monotonic()
         attempts = 0
+        # Same gate as the /no_think suffix: the cap exists for local
+        # reasoning leaders; the hosted-OpenAI path stays byte-identical
+        # to upstream.
+        completion_cap = {}
+        if self.args.LLM_base_url is not None:
+            completion_cap["max_tokens"] = LEADER_MAX_COMPLETION_TOKENS
         while True:
             try:
                 attempts += 1
                 output = self.leader.chat.completions.create(
                     model=self.args.LLM_api_text,
                     temperature=self.args.temperature,
-                    messages=self.messages
+                    messages=self.messages,
+                    **completion_cap
                 )
                 response = output.choices[0].message.content
                 break
