@@ -5,7 +5,7 @@ Payload shape and error mapping: docs/design-observation.md.
 import json
 from pathlib import Path
 
-from hima_dht.web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
+from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 from hima_dht_records import RECORD_FILE, fold_lines
 
 LIVE_GAME_ID = "live"

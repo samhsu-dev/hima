@@ -10,7 +10,7 @@ import requests
 
 from hima_dht import patches
 from hima_dht.errors import CommandError
-from hima_dht.web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
+from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 from hima_dht.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
 
 OLLAMA_URL = "http://localhost:11434"
@@ -59,7 +59,7 @@ def advisor_spec(port: int) -> ServiceSpec:
 def webui_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="webui",
-        argv=[sys.executable, "-m", "uvicorn", "--factory", "hima_dht.web.server:create_default_app",
+        argv=[sys.executable, "-m", "uvicorn", "--factory", "hima_dht_web.server:create_default_app",
               "--host", "127.0.0.1", "--port", str(port)],
         health_url=f"http://127.0.0.1:{port}/api/games",
         pid_file=SERVICE_DIR / "webui.pid",

@@ -1,16 +1,13 @@
 """Build and open the standalone replay viewer HTML."""
-import json
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 
 from hima_dht.errors import CommandError
 from hima_dht.export import export_frames
-from hima_dht.web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 from hima_dht_records import RECORD_FILE
-
-DATA_PLACEHOLDER = "__HIMA_DATA_JSON__"
-TEMPLATE_PATH = Path(__file__).with_name("player_template.html")
+from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
+from hima_dht_web.server import render
 
 
 @dataclass(frozen=True)
@@ -41,13 +38,6 @@ def view(path: Path, sample_interval: int) -> None:
     if not target.exists():
         target = build(ExportRequest(path, sample_interval, None, None))
     _open(target)
-
-
-def render(data: dict) -> str:
-    """Inject one game payload into the player template; returns the page HTML."""
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
-    return template.replace(DATA_PLACEHOLDER, payload)
 
 
 def _open(path: Path) -> None:

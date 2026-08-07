@@ -3,20 +3,22 @@
 Routes and error mapping: docs/design-observation.md.
 """
 import html
+import json
+from importlib.resources import files
+from pathlib import Path
 
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
-from uvicorn.config import STARTUP_FAILURE
 
-from hima_dht.errors import CommandError
-from hima_dht.viewer import render
-from hima_dht.web.games import GameStore
-from hima_dht.web.stream import StreamCursor, live_events
-from hima_dht.workspace import RUNS_DIR, TMP_DIR
+from hima_dht_records import RUNS_DIRNAME, TMP_DIRNAME
+from hima_dht_web.games import GameStore
+from hima_dht_web.stream import StreamCursor, live_events
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8123
+# The injection marker inside player_template.html's payload script tag.
+DATA_PLACEHOLDER = "__HIMA_DATA_JSON__"
+TEMPLATE_RESOURCE = files("hima_dht_web") / "_resources" / "templates" / "player_template.html"
 HTTP_NOT_FOUND = 404
 HTTP_CONFLICT = 409
 MISSING_RECORD_DETAIL = (
@@ -46,19 +48,17 @@ def create_app(store: GameStore) -> FastAPI:
 
 
 def create_default_app() -> FastAPI:
-    """Build the app over the workspace layout; `hima up`'s uvicorn factory target."""
-    return create_app(GameStore(RUNS_DIR, TMP_DIR))
+    """Build the app over the run layout at the working directory; the
+    `uvicorn --factory` target for the webui."""
+    root = Path.cwd()
+    return create_app(GameStore(root / RUNS_DIRNAME, root / TMP_DIRNAME))
 
 
-def serve(host: str, port: int) -> None:
-    """Serve games from the workspace layout; CommandError when the port is bound."""
-    app = create_default_app()
-    try:
-        uvicorn.run(app, host=host, port=port)
-    except SystemExit as error:
-        if error.code != STARTUP_FAILURE:
-            raise
-        raise CommandError(f"cannot serve on {host}:{port}: address already in use") from error
+def render(data: dict) -> str:
+    """Inject one game payload into the player template; returns the page HTML."""
+    template = TEMPLATE_RESOURCE.read_text(encoding="utf-8")
+    payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+    return template.replace(DATA_PLACEHOLDER, payload)
 
 
 def _register_pages(app: FastAPI, store: GameStore) -> None:

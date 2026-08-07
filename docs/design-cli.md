@@ -38,10 +38,10 @@ infrastructure, no domain semantics, no non-trivial algorithm.
   runs from the repository root or any chosen run directory. Directory names
   come from the record contract (`hima_dht_records`); `SC2_APP` stays an
   absolute macOS constant.
-- **Assets**: `player_template.html` — self-contained canvas player; `viewer` injects
-  exported JSON into its placeholder to produce one standalone HTML file per replay.
-  The observation server injects the same payload into the same template
-  (`design-observation.md`).
+- **Assets**: none. The canvas player template lives in `hima_dht_web`
+  (`design-observation.md`); `viewer` calls `hima_dht_web.server.render` to
+  produce one standalone HTML file per replay — the same injection the
+  observation server uses.
 
 ## Class / Type Specifications
 
@@ -126,8 +126,11 @@ Each command module exposes one public entry consumed by `cli`.
   Errors: `CommandError` when the replay is missing; engine failures propagate.
 - **view(path) -> None** (`viewer`) — Behavior: `export` when given a replay (reuse
   an existing export when present), then open the HTML in the default browser.
-- **serve(host, port) -> None** (`web.server`) — the observation server; full
-  specification in `design-observation.md`.
+- **_serve(host, port) -> None** (`cli`) — Behavior: build the observation app
+  via `hima_dht_web.server.create_default_app` and run uvicorn in-process;
+  routes and page behavior in `design-observation.md`. Errors: `CommandError`
+  when the port is bound (uvicorn's startup-failure exit is mapped, never
+  propagated as `SystemExit`).
 
 ## Exception / Error Types
 

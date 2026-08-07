@@ -20,14 +20,18 @@ infrastructure over an already-confirmed record vocabulary, no non-trivial algor
   (writes the same record file during re-simulation) and `hima_dht_records`
   (folding). `hima_dht_cli.viewer` uses `logs`.
 - **Abstract**: none.
-- **Exceptions**: `CommandError` (from `hima_dht_cli.errors`), raised by `server.serve` on
-  startup failure; per-request failures map to HTTP status codes.
+- **Exceptions**: none raised by the web member (per-request failures map to
+  HTTP status codes); `hima serve` in `hima_dht_cli.cli` maps uvicorn's
+  startup failure to `CommandError`, keeping the web member free of cli types.
 - **Dependency roles**: Data holders: record dicts (schema below), `StreamCursor`
   (one client's stream progress: record byte offset, decision and command entry
   counts). Orchestrator: `server`. Helpers: `records`, `logs`, `games`, `stream`.
-- **Assets**: `player_template.html` (`hima_dht_cli`) gains a live-mode section: when the injected
+- **Assets**: `player_template.html` (`hima_dht_web/_resources/templates/`,
+  read via `importlib.resources`) gains a live-mode section: when the injected
   payload carries `live: true`, the page subscribes to the record stream and appends
-  incoming records; all rendering code is shared with replay mode.
+  incoming records; all rendering code is shared with replay mode. The template
+  lives in the web member so the webui image is self-contained; `hima_dht_cli.viewer`
+  reuses `server.render` for the standalone export.
 
 ## Record Schema (`records`)
 
@@ -88,15 +92,18 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
 - **parse_decisions(path) -> list[dict]**, **parse_commands(path) -> list[dict]**
   (`logs`) — moved unchanged from the cli viewer module; absent file returns an empty list
   (the page renders without that panel).
-- **serve(host, port) -> None** (`server`) — Behavior: start the HTTP server with
+- **create_app(store) -> FastAPI** (`server`) — Behavior: build the HTTP app with
   routes: game list page and JSON (`/`, `/api/games`), observation page and payload
   (`/games/{id}`, `/api/games/{id}`), live record stream (`/api/live/stream`,
   server-sent events). The observation page is `player_template.html` with the
   payload injected server-side — the same injection the standalone export uses.
-  Errors: `CommandError` when the port is bound.
 - **create_default_app() -> FastAPI** (`server`) — Behavior: build the app over the
-  workspace layout (`GameStore(RUNS_DIR, TMP_DIR)`); the `uvicorn --factory` target
-  for the webui managed by `hima up` (`design-cli.md`). Errors: none.
+  run layout at the working directory (`GameStore` on cwd-joined `RUNS_DIRNAME`,
+  `TMP_DIRNAME` from `hima_dht_records`); the `uvicorn --factory` target for the
+  webui image and the webui managed by `hima up` (`design-cli.md`). Errors: none.
+- **render(data) -> str** (`server`) — Behavior: inject one game payload JSON into
+  the template's placeholder; used by the observation page and by
+  `hima_dht_cli.viewer` for the standalone export. Errors: none.
 - **stream events** — the live endpoint tails `tmp/frames.jsonl`, `output.txt`, and
   `command.txt`, emitting each new record with its kind (`frame`/`type`/`decision`/
   `command`/`end`); a client joining mid-game gets the payload from `/games/live`
@@ -110,10 +117,12 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
 - `hima_dht_cli.export` — `ReplayExporter` drives a `GameSampler` writing `frames.jsonl`
   beside the replay's logs, then folds it; the exported page is unchanged.
 - `hima_dht_cli.workspace` — `frames.jsonl` joins `GAME_OUTPUTS` so `hima run` archives it.
-- `hima_dht_cli.cli` — the `serve` subcommand (`--host`, `--port`).
+- `hima_dht_cli.cli` — the `serve` subcommand (`--host`, `--port`) runs uvicorn
+  in-process over `create_default_app` and maps startup failure to `CommandError`.
 
 ## Exception / Error Types
 
-- `CommandError` — startup failures (port bound, template missing).
+- `CommandError` (`hima_dht_cli.errors`) — raised by the cli's serve wrapper on
+  startup failure (port bound); never raised inside the web member.
 - HTTP 404 — unknown game id. HTTP 409 — payload requested for a game with no record
   file (message names the `hima export` fallback).

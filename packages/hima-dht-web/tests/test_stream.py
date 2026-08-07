@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.web.stream (live event tailing).
+"""Unit tests for hima_dht_web.stream (live event tailing).
 
 Test cases:
 - test_live_events_forwards_records_until_end: a finished record file streams
@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from hima_dht.web import stream
-from hima_dht.web.stream import StreamCursor, live_events
+from hima_dht_web import stream
+from hima_dht_web.stream import StreamCursor, live_events
 
 META_LINE = '{"k":"meta","map":"TestMap","playable":[2,2,100,120],"neutral":[]}'
 FRAME_LINE = '{"k":"frame","t":9.5,"m":50,"g":0,"su":12,"sc":15,"u":[]}'

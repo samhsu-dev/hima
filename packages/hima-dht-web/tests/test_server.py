@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.web.server (HTTP surface).
+"""Unit tests for hima_dht_web.server (HTTP surface).
 
 Test cases:
 - test_index_page_links_archived_game: the index page lists an archived run
@@ -11,10 +11,8 @@ Test cases:
 - test_unknown_game_returns_404: an unknown id maps KeyError to HTTP 404.
 - test_missing_record_returns_409_naming_export: a run without frames.jsonl
   maps FileNotFoundError to HTTP 409 with a detail naming `hima export`.
-- test_serve_bound_port_raises_command_error: serving on a bound port raises
-  CommandError instead of exiting the process.
 - test_create_default_app_exposes_api_games_route: the uvicorn factory target
-  builds the observation app over the workspace layout.
+  builds the observation app over the run layout at the working directory.
 - test_live_stream_replays_finished_game: /api/live/stream on a finished tmp
   record file returns every record as SSE events and closes.
 - test_live_stream_resumes_from_query_offsets: records/decisions/commands
@@ -23,15 +21,12 @@ Test cases:
   live true and the stream offset for the EventSource query.
 """
 import json
-import socket
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
-from hima_dht.errors import CommandError
-from hima_dht.web.games import GameStore
-from hima_dht.web.server import create_app, create_default_app, serve
+from hima_dht_web.games import GameStore
+from hima_dht_web.server import create_app, create_default_app
 
 META_LINE = '{"k":"meta","map":"TestMap","playable":[2,2,100,120],"neutral":[]}'
 FRAME_LINE = '{"k":"frame","t":9.5,"m":50,"g":0,"su":12,"sc":15,"u":[]}'
@@ -162,16 +157,6 @@ def test_live_page_injects_stream_offset(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert '"live":true' in response.text
     assert '"stream":{"records":' in response.text
-
-
-def test_serve_bound_port_raises_command_error() -> None:
-    with socket.socket() as blocker:
-        blocker.bind(("127.0.0.1", 0))
-        blocker.listen(1)
-        port = blocker.getsockname()[1]
-
-        with pytest.raises(CommandError):
-            serve("127.0.0.1", port)
 
 
 def test_create_default_app_exposes_api_games_route() -> None:

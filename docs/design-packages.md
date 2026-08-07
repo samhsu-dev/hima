@@ -68,7 +68,10 @@ the contracts between them. Per-member internals: `design-cli.md`,
 - **Responsibility**: The observation webui: game store, payload endpoints,
   live stream, log parsing, page serving.
 - **Modules**: `server.py`, `games.py`, `logs.py`, `stream.py` (unchanged
-  split; `records.py` leaves for the records and game packages).
+  split; `records.py` leaves for the records and game packages); asset
+  `_resources/templates/player_template.html` read via `importlib.resources`
+  — `server.render` injects payloads for the observation page and for
+  `hima_dht_cli.viewer`'s standalone export.
 - **Invocation**: `uvicorn --factory hima_dht_web.server:create_default_app`;
   the factory anchors `runs/` and `tmp/` to the working directory using the
   run-layout names from `hima_dht_records`.
@@ -79,7 +82,7 @@ the contracts between them. Per-member internals: `design-cli.md`,
   runs, metrics, site-package patches, replay tools, page export.
 - **Modules**: `cli.py` (entry, `[project.scripts] hima`), `services.py`,
   `experiment.py`, `metrics.py`, `patches.py`, `replay.py`, `export.py`,
-  `viewer.py`, `workspace.py`, `errors.py`, `player_template.html`.
+  `viewer.py`, `workspace.py`, `errors.py`.
 - **Run layout**: `workspace.py` anchors `tmp/`, `runs/`, and the service
   state directory to the invoking process's working directory (`RUN_ROOT`);
   `hima` runs from the repository root or any chosen run directory. The

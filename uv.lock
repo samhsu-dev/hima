@@ -16,6 +16,7 @@ members = [
     "hima-dht-advisor",
     "hima-dht-game",
     "hima-dht-records",
+    "hima-dht-web",
 ]
 overrides = [{ name = "s2clientprotocol", marker = "sys_platform == 'never'" }]
 
@@ -640,6 +641,7 @@ dependencies = [
     { name = "hima-dht-advisor" },
     { name = "hima-dht-game" },
     { name = "hima-dht-records" },
+    { name = "hima-dht-web" },
     { name = "mpyq" },
     { name = "numpy" },
     { name = "openai" },
@@ -670,6 +672,7 @@ requires-dist = [
     { name = "hima-dht-advisor", editable = "packages/hima-dht-advisor" },
     { name = "hima-dht-game", editable = "packages/hima-dht-game" },
     { name = "hima-dht-records", editable = "packages/hima-dht-records" },
+    { name = "hima-dht-web", editable = "packages/hima-dht-web" },
     { name = "mpyq", specifier = "==0.2.5" },
     { name = "numpy", specifier = "==2.5.1" },
     { name = "openai", specifier = "==2.53.0" },
@@ -740,6 +743,23 @@ requires-dist = [
 name = "hima-dht-records"
 version = "0.1.0"
 source = { editable = "packages/hima-dht-records" }
+
+[[package]]
+name = "hima-dht-web"
+version = "0.1.0"
+source = { editable = "packages/hima-dht-web" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "hima-dht-records" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = "==0.141.1" },
+    { name = "hima-dht-records", editable = "packages/hima-dht-records" },
+    { name = "uvicorn", specifier = "==0.52.1" },
+]
 
 [[package]]
 name = "httpcore"

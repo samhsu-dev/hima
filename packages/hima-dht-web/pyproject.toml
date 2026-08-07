@@ -1,0 +1,17 @@
+[project]
+name = "hima-dht-web"
+version = "0.1.0"
+description = "Observation webui: game store, payload endpoints, live stream, page serving"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn==0.52.1",
+    "hima-dht-records",
+]
+
+[tool.uv.sources]
+hima-dht-records = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -8,14 +8,16 @@ import os
 import sys
 from pathlib import Path
 
+import uvicorn
 from dotenv import load_dotenv
+from uvicorn.config import STARTUP_FAILURE
 
 from hima_dht import experiment, metrics, patches, replay, services, viewer
 from hima_dht.errors import CommandError
 from hima_dht.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
-from hima_dht.web import server
-from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
 from hima_dht.workspace import RUN_ROOT
+from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
+from hima_dht_web import server
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
 DIFFICULTIES = (
@@ -155,7 +157,17 @@ def _add_serve(sub: "argparse._SubParsersAction") -> None:
     observe = sub.add_parser("serve", help="serve the game observation web UI")
     observe.add_argument("--host", default=_env_str(ENV_WEBUI_HOST, server.DEFAULT_HOST))
     observe.add_argument("--port", type=int, default=_env_int(ENV_WEBUI_PORT, server.DEFAULT_PORT))
-    observe.set_defaults(func=lambda args: server.serve(args.host, args.port))
+    observe.set_defaults(func=lambda args: _serve(args.host, args.port))
+
+
+def _serve(host: str, port: int) -> None:
+    app = server.create_default_app()
+    try:
+        uvicorn.run(app, host=host, port=port)
+    except SystemExit as error:
+        if error.code != STARTUP_FAILURE:
+            raise
+        raise CommandError(f"cannot serve on {host}:{port}: address already in use") from error
 
 
 def _cmd_export(args: argparse.Namespace) -> None:

@@ -15,7 +15,11 @@ Test cases:
   default from HIMA_WEBUI_HOST.
 - test_invalid_port_environment_raises_command_error: a non-integer
   HIMA_ADVISOR_PORT raises CommandError instead of a traceback.
+- test_serve_bound_port_raises_command_error: serving on a bound port
+  raises CommandError instead of exiting the process.
 """
+import socket
+
 import pytest
 
 from hima_dht import cli
@@ -62,3 +66,13 @@ def test_invalid_port_environment_raises_command_error(monkeypatch: pytest.Monke
 
     with pytest.raises(CommandError, match="HIMA_ADVISOR_PORT"):
         cli._build_parser()
+
+
+def test_serve_bound_port_raises_command_error() -> None:
+    with socket.socket() as blocker:
+        blocker.bind(("127.0.0.1", 0))
+        blocker.listen(1)
+        port = blocker.getsockname()[1]
+
+        with pytest.raises(CommandError):
+            cli._serve("127.0.0.1", port)
