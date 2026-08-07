@@ -18,6 +18,7 @@ dependencies = [
     "hima-dht-records",
     "hima-dht-game",
     "hima-dht-web",
+    "tomli-w>=1.2.0",
 ]
 
 [project.optional-dependencies]

@@ -1,25 +1,23 @@
-"""Managed background services: advisor server, Ollama, and the webui."""
+"""Natively spawned services: specs, ownership, launch, health wait, stop."""
 
 import logging
+import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import psutil
-import requests
 
 from hima_dht_cli.errors import CommandError
-from hima_dht_cli.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
-from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
+from hima_dht_cli.workspace import RUN_ROOT, SERVICE_DIR
+
+from ._health import advisor_health_url, healthy, leader_model_present, ollama_url
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = "http://localhost:11434"
-DEFAULT_ADVISOR_HOST = "localhost"
-DEFAULT_ADVISOR_PORT = 8090
-DEFAULT_LEADER_MODEL = "qwen3:8b"
 HEALTH_ATTEMPTS = 120
 HEALTH_INTERVAL_S = 2.0
 STOP_WAIT_S = 10
@@ -27,21 +25,20 @@ STOP_WAIT_S = 10
 
 @dataclass(frozen=True)
 class ServiceSpec:
+    """One natively spawned background service.
+
+    `process_keyword` guards `down`: a stored PID is killed only when its
+    command line contains this keyword. `env` is extra spawn environment
+    merged over the inherited one.
+    """
+
     name: str
     argv: list[str]
     health_url: str
     pid_file: Path
     log_file: Path
     process_keyword: str
-
-
-@dataclass(frozen=True)
-class ServiceOptions:
-    """Endpoint and model selection for the managed services."""
-
-    advisor_port: int = DEFAULT_ADVISOR_PORT
-    webui_port: int = DEFAULT_WEBUI_PORT
-    model: str = DEFAULT_LEADER_MODEL
+    env: Mapping[str, str] = field(default_factory=dict)
 
 
 def advisor_spec(port: int) -> ServiceSpec:
@@ -58,7 +55,7 @@ def advisor_spec(port: int) -> ServiceSpec:
             "--port",
             str(port),
         ],
-        health_url=_advisor_health_url("127.0.0.1", port),
+        health_url=advisor_health_url("127.0.0.1", port),
         pid_file=SERVICE_DIR / "advisor.pid",
         log_file=SERVICE_DIR / "advisor.log",
         process_keyword="uvicorn",
@@ -86,110 +83,62 @@ def webui_spec(port: int) -> ServiceSpec:
     )
 
 
-def ollama_spec() -> ServiceSpec:
+def ollama_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="ollama",
         argv=["ollama", "serve"],
-        health_url=f"{OLLAMA_URL}/api/tags",
+        health_url=f"{ollama_url(port)}/api/tags",
         pid_file=SERVICE_DIR / "ollama.pid",
         log_file=SERVICE_DIR / "ollama.log",
         process_keyword="ollama",
+        env=_ollama_env(port),
     )
 
 
-def advisor_healthy(host: str, port: int) -> bool:
-    return _healthy(_advisor_health_url(host, port))
+def ensure_service(spec: ServiceSpec) -> int:
+    """Pid of the healthy owned process, launched when absent.
 
-
-def ollama_healthy(root: str) -> bool:
-    return _healthy(f"{root}/api/tags")
-
-
-def leader_model_present(root: str, model: str) -> bool:
-    try:
-        response = requests.get(f"{root}/api/tags", timeout=3)
-        response.raise_for_status()
-    except requests.RequestException:
-        return False
-    names = [entry["name"] for entry in response.json().get("models", [])]
-    return any(name == model or name.startswith(f"{model}:") for name in names)
-
-
-def leader_models(base_url: str, api_key: str) -> list[str] | None:
-    """Model ids served at an OpenAI-compatible endpoint; None when unreachable."""
-    try:
-        response = requests.get(
-            f"{base_url}/models",
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=3,
+    Raises:
+        CommandError: the endpoint is answered by a process hima does not
+            own, or health is not reached within the attempt bound.
+    """
+    pid = owned_pid(spec)
+    if pid is not None:
+        if healthy(spec.health_url):
+            logger.info(
+                "service already healthy: service=%s pid=%d url=%s", spec.name, pid, spec.health_url
+            )
+            return pid
+        wait_healthy(spec)  # the owned process is still starting up
+        return pid
+    if healthy(spec.health_url):
+        raise CommandError(
+            f"{spec.name}: {spec.health_url} is answered by a process hima did not start "
+            f"(no live pid in {spec.pid_file}); stop the foreign server "
+            f"(a compose container: `docker compose stop {spec.name}`) "
+            f"or run `hima up --backend docker`"
         )
-        response.raise_for_status()
-    except requests.RequestException:
+    pid = launch(spec)
+    wait_healthy(spec)
+    return pid
+
+
+def owned_pid(spec: ServiceSpec) -> int | None:
+    """Live pid recorded for the service; clears a stale pid file."""
+    if not spec.pid_file.exists():
         return None
-    return [entry["id"] for entry in response.json().get("data", [])]
-
-
-def _advisor_health_url(host: str, port: int) -> str:
-    return f"http://{host}:{port}/health"
-
-
-def up(options: ServiceOptions, skip_pull: bool) -> None:
-    _ensure_service(ollama_spec())
-    _ensure_leader_model(options.model, skip_pull)
-    _ensure_service(advisor_spec(options.advisor_port))
-    _ensure_service(webui_spec(options.webui_port))
-    print("all services healthy")
-
-
-def down() -> None:
-    for spec in (
-        webui_spec(DEFAULT_WEBUI_PORT),
-        advisor_spec(DEFAULT_ADVISOR_PORT),
-        ollama_spec(),
-    ):
-        _stop_one(spec)
-
-
-def status(options: ServiceOptions) -> None:
-    for label, ok, detail in _collect_checks(options):
-        mark = "✓" if ok else "✗"
-        print(f" {mark} {label:<40} {detail}")
-
-
-def _collect_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
-    advisor = advisor_spec(options.advisor_port)
-    webui = webui_spec(options.webui_port)
-    model = options.model
-    checks = [
-        ("advisor server", _healthy(advisor.health_url), advisor.health_url),
-        ("webui server", _healthy(webui.health_url), webui.health_url),
-        ("ollama server", ollama_healthy(OLLAMA_URL), OLLAMA_URL),
-        (
-            f"leader model {model}",
-            leader_model_present(OLLAMA_URL, model),
-            "ollama tags",
-        ),
-        ("SC2 installation", SC2_APP.exists(), str(SC2_APP)),
-    ]
-    return checks
-
-
-def _healthy(url: str) -> bool:
+    pid = int(spec.pid_file.read_text(encoding="utf-8").strip())
     try:
-        return requests.get(url, timeout=2).status_code < 500
-    except requests.RequestException:
-        return False
+        cmdline = " ".join(psutil.Process(pid).cmdline())
+    except psutil.NoSuchProcess:
+        spec.pid_file.unlink()
+        return None
+    if spec.process_keyword not in cmdline:
+        return None
+    return pid
 
 
-def _ensure_service(spec: ServiceSpec) -> None:
-    if _healthy(spec.health_url):
-        logger.info("service already healthy: service=%s url=%s", spec.name, spec.health_url)
-        return
-    _launch(spec)
-    _wait_healthy(spec)
-
-
-def _launch(spec: ServiceSpec) -> None:
+def launch(spec: ServiceSpec) -> int:
     SERVICE_DIR.mkdir(parents=True, exist_ok=True)
     try:
         with open(spec.log_file, "ab") as log:
@@ -199,17 +148,19 @@ def _launch(spec: ServiceSpec) -> None:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
+                env={**os.environ, **spec.env} if spec.env else None,
             )
     except FileNotFoundError as error:
         raise CommandError(f"{spec.name}: executable not found: {spec.argv[0]}") from error
     spec.pid_file.write_text(str(process.pid), encoding="utf-8")
     logger.info("service launched: service=%s pid=%d log=%s", spec.name, process.pid, spec.log_file)
+    return process.pid
 
 
-def _wait_healthy(spec: ServiceSpec) -> None:
+def wait_healthy(spec: ServiceSpec) -> None:
     started = time.monotonic()
     for attempt in range(1, HEALTH_ATTEMPTS + 1):
-        if _healthy(spec.health_url):
+        if healthy(spec.health_url):
             logger.info(
                 "service healthy: service=%s attempts=%d duration_s=%.0f",
                 spec.name,
@@ -224,8 +175,9 @@ def _wait_healthy(spec: ServiceSpec) -> None:
     )
 
 
-def _ensure_leader_model(model: str, skip_pull: bool) -> None:
-    if leader_model_present(OLLAMA_URL, model):
+def ensure_leader_model(model: str, skip_pull: bool, ollama_port: int) -> None:
+    """Ensure the model in the native Ollama store, pulling when absent."""
+    if leader_model_present(ollama_url(ollama_port), model):
         logger.debug("leader model present: model=%s", model)
         return
     if skip_pull:
@@ -233,7 +185,9 @@ def _ensure_leader_model(model: str, skip_pull: bool) -> None:
     # Start record at INFO: the pull downloads gigabytes and can stall.
     logger.info("leader model pull starting: model=%s", model)
     started = time.monotonic()
-    completed = subprocess.run(["ollama", "pull", model])
+    completed = subprocess.run(
+        ["ollama", "pull", model], env={**os.environ, **_ollama_env(ollama_port)}
+    )
     logger.info(
         "leader model pull exited: model=%s exit_code=%d duration_s=%.0f",
         model,
@@ -244,7 +198,7 @@ def _ensure_leader_model(model: str, skip_pull: bool) -> None:
         raise CommandError(f"ollama pull {model} failed with code {completed.returncode}")
 
 
-def _stop_one(spec: ServiceSpec) -> None:
+def stop_one(spec: ServiceSpec) -> None:
     if not spec.pid_file.exists():
         logger.info("service stop skipped: service=%s reason=no_pid_file", spec.name)
         return
@@ -263,3 +217,9 @@ def _stop_one(spec: ServiceSpec) -> None:
     process.wait(timeout=STOP_WAIT_S)
     spec.pid_file.unlink()
     logger.info("service stopped: service=%s pid=%d", spec.name, pid)
+
+
+def _ollama_env(port: int) -> dict[str, str]:
+    # OLLAMA_HOST is read by both `ollama serve` (bind address) and the
+    # `ollama pull` client (target server).
+    return {"OLLAMA_HOST": f"127.0.0.1:{port}"}

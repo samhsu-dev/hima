@@ -42,6 +42,8 @@ ENV_WEBUI_PORT = "HIMA_WEBUI_PORT"
 ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
 ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
 ENV_LEADER_API_KEY = "HIMA_LEADER_API_KEY"
+ENV_SERVICE_BACKEND = "HIMA_SERVICE_BACKEND"
+ENV_OLLAMA_PORT = "HIMA_OLLAMA_PORT"
 # Also read by the game process (hima_dht_game.main), which inherits this
 # process's environment; the contract is documented in .env.example.
 ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
@@ -82,6 +84,8 @@ app = typer.Typer(
 AdvisorPortOption = Annotated[int, typer.Option(envvar=ENV_ADVISOR_PORT)]
 WebuiPortOption = Annotated[int, typer.Option(envvar=ENV_WEBUI_PORT)]
 LeaderModelOption = Annotated[str, typer.Option(envvar=ENV_LEADER_MODEL)]
+BackendOption = Annotated[services.ServiceBackend, typer.Option(envvar=ENV_SERVICE_BACKEND)]
+OllamaPortOption = Annotated[int, typer.Option(envvar=ENV_OLLAMA_PORT)]
 
 
 def main() -> int:
@@ -100,13 +104,26 @@ def main() -> int:
 
 @app.command()
 def up(
+    backend: BackendOption = services.ServiceBackend.NATIVE,
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
+    ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
     skip_pull: Annotated[bool, typer.Option("--skip-pull")] = False,
+    manifest_out: Annotated[Path | None, typer.Option("--manifest-out")] = None,
 ) -> None:
     """Launch advisor, Ollama, and the webui, wait until healthy."""
-    services.up(_service_options(port, webui_port, model), skip_pull)
+    services.up(
+        services.ServiceOptions(
+            backend=backend,
+            advisor_port=port,
+            webui_port=webui_port,
+            ollama_port=ollama_port,
+            model=model,
+        ),
+        skip_pull,
+        manifest_out,
+    )
 
 
 @app.command()
@@ -119,10 +136,18 @@ def down() -> None:
 def status(
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
+    ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
 ) -> None:
     """Report service and game state."""
-    services.status(_service_options(port, webui_port, model))
+    services.status(
+        services.ServiceOptions(
+            advisor_port=port,
+            webui_port=webui_port,
+            ollama_port=ollama_port,
+            model=model,
+        )
+    )
 
 
 @app.command()
@@ -193,10 +218,6 @@ def serve(
 ) -> None:
     """Serve the game observation web UI."""
     _serve(host, port)
-
-
-def _service_options(port: int, webui_port: int, model: str) -> services.ServiceOptions:
-    return services.ServiceOptions(advisor_port=port, webui_port=webui_port, model=model)
 
 
 def _serve(host: str, port: int) -> None:
