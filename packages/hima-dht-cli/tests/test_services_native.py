@@ -3,22 +3,31 @@
 Test cases:
 - test_ensure_service_foreign_endpoint_raises: an endpoint answered
   without an owned pid raises CommandError instead of skipping launch.
-- test_ensure_service_owned_healthy_short_circuits: a live owned pid with
-  a healthy endpoint returns without launching.
+- test_ensure_service_owned_healthy_short_circuits: a live owned
+  group-leader pid with a healthy endpoint returns without launching.
 - test_ensure_leader_model_queries_ollama_port: the presence check runs
   against the Ollama root built from the given port.
 - test_ensure_leader_model_logs_pull_exit: a pull emits an exit record
   carrying the model and the exit code.
 - test_wait_healthy_logs_service_and_attempts: reaching health emits one
   record carrying the service name and the attempt count.
+- test_wait_healthy_dead_process_reports_log_tail: a process that exits
+  before health fails immediately, quoting the service log.
 - test_stop_one_logs_skip_without_pid_file: stopping a service that hima
   never started emits a skip record instead of touching any process.
+- test_stop_one_escalates_to_sigkill: a process ignoring SIGTERM gets
+  SIGKILL after the stop wait, and the pid record is cleared.
+- test_owned_pid_clears_corrupt_pid_file: an unparsable pid record is
+  removed and reported as not owned.
+- test_owned_pid_access_denied_clears_record: a pid reused by another
+  user's process is treated as stale, not as an error.
 - test_ollama_spec_binds_port_via_env: the ollama spec carries OLLAMA_HOST
   for the requested port and probes the same port.
 """
 
 import logging
-import os
+import signal
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -53,13 +62,17 @@ def test_ensure_service_foreign_endpoint_raises(
 def test_ensure_service_owned_healthy_short_circuits(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    own_executable = psutil.Process(os.getpid()).cmdline()[0]
-    spec = _spec(tmp_path, keyword=own_executable)
-    spec.pid_file.write_text(str(os.getpid()), encoding="utf-8")
-    monkeypatch.setattr(_native, "healthy", lambda url: True)
-    monkeypatch.setattr(_native, "launch", lambda spec: pytest.fail("launch must not run"))
+    child = subprocess.Popen(["sleep", "30"], start_new_session=True)
+    try:
+        spec = _spec(tmp_path, keyword="sleep")
+        spec.pid_file.write_text(str(child.pid), encoding="utf-8")
+        monkeypatch.setattr(_native, "healthy", lambda url: True)
+        monkeypatch.setattr(_native, "launch", lambda spec: pytest.fail("launch must not run"))
 
-    assert _native.ensure_service(spec) == os.getpid()
+        assert _native.ensure_service(spec) == child.pid
+    finally:
+        child.kill()
+        child.wait()
 
 
 def test_ensure_leader_model_queries_ollama_port(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -103,12 +116,25 @@ def test_wait_healthy_logs_service_and_attempts(
     monkeypatch.setattr(_native, "healthy", lambda url: True)
 
     with caplog.at_level(logging.INFO, logger="hima_dht_cli.services._native"):
-        _native.wait_healthy(_native.advisor_spec(8090))
+        _native.wait_healthy(_native.advisor_spec(8090), pid=4321)
 
     messages = [record.getMessage() for record in caplog.records]
     assert any(
         message.startswith("service healthy: service=advisor attempts=1") for message in messages
     )
+
+
+def test_wait_healthy_dead_process_reports_log_tail(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = _spec(tmp_path)
+    spec.log_file.write_text("bind: address already in use\n", encoding="utf-8")
+    monkeypatch.setattr(_native, "healthy", lambda url: False)
+    child = subprocess.Popen(["true"])
+    child.wait()
+
+    with pytest.raises(CommandError, match="address already in use"):
+        _native.wait_healthy(spec, child.pid)
 
 
 def test_stop_one_logs_skip_without_pid_file(
@@ -120,6 +146,50 @@ def test_stop_one_logs_skip_without_pid_file(
 
     messages = [record.getMessage() for record in caplog.records]
     assert messages == ["service stop skipped: service=advisor reason=no_pid_file"]
+
+
+def test_stop_one_escalates_to_sigkill(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    spec = _spec(tmp_path, keyword="fake")
+    spec.pid_file.write_text("4321", encoding="utf-8")
+    signals: list[int] = []
+
+    class FakeProcess:
+        pid = 4321
+
+        def wait(self, timeout: float) -> None:
+            if signal.SIGKILL not in signals:
+                raise psutil.TimeoutExpired(timeout)
+
+    monkeypatch.setattr(_native, "_owned_process", lambda spec, pid: FakeProcess())
+    monkeypatch.setattr(_native, "_signal_group", lambda pid, signum: signals.append(signum))
+
+    _native.stop_one(spec)
+
+    assert signals == [signal.SIGTERM, signal.SIGKILL]
+    assert not spec.pid_file.exists()
+
+
+def test_owned_pid_clears_corrupt_pid_file(tmp_path: Path) -> None:
+    spec = _spec(tmp_path)
+    spec.pid_file.write_text("not-a-pid", encoding="utf-8")
+
+    assert _native.owned_pid(spec) is None
+    assert not spec.pid_file.exists()
+
+
+def test_owned_pid_access_denied_clears_record(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = _spec(tmp_path)
+    spec.pid_file.write_text("4321", encoding="utf-8")
+
+    def denied(pid: int) -> None:
+        raise psutil.AccessDenied(pid)
+
+    monkeypatch.setattr("hima_dht_cli.services._native.psutil.Process", denied)
+
+    assert _native.owned_pid(spec) is None
+    assert not spec.pid_file.exists()
 
 
 def test_ollama_spec_binds_port_via_env() -> None:

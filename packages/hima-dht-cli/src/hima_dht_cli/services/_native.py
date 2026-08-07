@@ -2,6 +2,7 @@
 
 import logging
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 HEALTH_ATTEMPTS = 120
 HEALTH_INTERVAL_S = 2.0
 STOP_WAIT_S = 10
+# Grace after SIGKILL; only a process stuck in uninterruptible I/O survives it.
+KILL_WAIT_S = 5
+# Failure diagnostics quote this much of the end of the service log.
+LOG_TAIL_BYTES = 2048
 
 
 @dataclass(frozen=True)
@@ -100,7 +105,8 @@ def ensure_service(spec: ServiceSpec) -> int:
 
     Raises:
         CommandError: the endpoint is answered by a process hima does not
-            own, or health is not reached within the attempt bound.
+            own, the process exits before health, or health is not
+            reached within the attempt bound.
     """
     pid = owned_pid(spec)
     if pid is not None:
@@ -109,7 +115,7 @@ def ensure_service(spec: ServiceSpec) -> int:
                 "service already healthy: service=%s pid=%d url=%s", spec.name, pid, spec.health_url
             )
             return pid
-        wait_healthy(spec)  # the owned process is still starting up
+        wait_healthy(spec, pid)  # the owned process is still starting up
         return pid
     if healthy(spec.health_url):
         raise CommandError(
@@ -119,21 +125,17 @@ def ensure_service(spec: ServiceSpec) -> int:
             f"or run `hima up --backend docker`"
         )
     pid = launch(spec)
-    wait_healthy(spec)
+    wait_healthy(spec, pid)
     return pid
 
 
 def owned_pid(spec: ServiceSpec) -> int | None:
-    """Live pid recorded for the service; clears a stale pid file."""
-    if not spec.pid_file.exists():
+    """Live pid recorded for the service; clears a stale record."""
+    pid = _read_pid_file(spec)
+    if pid is None:
         return None
-    pid = int(spec.pid_file.read_text(encoding="utf-8").strip())
-    try:
-        cmdline = " ".join(psutil.Process(pid).cmdline())
-    except psutil.NoSuchProcess:
+    if _owned_process(spec, pid) is None:
         spec.pid_file.unlink()
-        return None
-    if spec.process_keyword not in cmdline:
         return None
     return pid
 
@@ -157,7 +159,13 @@ def launch(spec: ServiceSpec) -> int:
     return process.pid
 
 
-def wait_healthy(spec: ServiceSpec) -> None:
+def wait_healthy(spec: ServiceSpec, pid: int) -> None:
+    """Block until the health URL answers.
+
+    Raises:
+        CommandError: the process exited before answering, or the attempt
+            bound is reached while it keeps running.
+    """
     started = time.monotonic()
     for attempt in range(1, HEALTH_ATTEMPTS + 1):
         if healthy(spec.health_url):
@@ -168,6 +176,11 @@ def wait_healthy(spec: ServiceSpec) -> None:
                 time.monotonic() - started,
             )
             return
+        if _exited(pid):
+            raise CommandError(
+                f"{spec.name}: process {pid} exited before answering {spec.health_url}; "
+                f"log tail ({spec.log_file}):\n{_log_tail(spec.log_file)}"
+            )
         time.sleep(HEALTH_INTERVAL_S)
     raise CommandError(
         f"{spec.name}: no health response after {HEALTH_ATTEMPTS} checks; "
@@ -199,24 +212,98 @@ def ensure_leader_model(model: str, skip_pull: bool, ollama_port: int) -> None:
 
 
 def stop_one(spec: ServiceSpec) -> None:
-    if not spec.pid_file.exists():
+    """Stop the recorded service process group, escalating to SIGKILL."""
+    pid = _read_pid_file(spec)
+    if pid is None:
         logger.info("service stop skipped: service=%s reason=no_pid_file", spec.name)
         return
-    pid = int(spec.pid_file.read_text(encoding="utf-8").strip())
+    process = _owned_process(spec, pid)
+    if process is None:
+        spec.pid_file.unlink()
+        if psutil.pid_exists(pid):
+            logger.warning(
+                "service stop skipped: service=%s pid=%d reason=pid_reused", spec.name, pid
+            )
+        else:
+            logger.info("service already exited: service=%s pid=%d", spec.name, pid)
+        return
+    _terminate_group(spec, process)
+    spec.pid_file.unlink()
+    logger.info("service stopped: service=%s pid=%d", spec.name, pid)
+
+
+def _read_pid_file(spec: ServiceSpec) -> int | None:
+    # A truncated or garbled record is stale state, not an error: clear it.
+    if not spec.pid_file.exists():
+        return None
+    content = spec.pid_file.read_text(encoding="utf-8").strip()
+    try:
+        return int(content)
+    except ValueError:
+        spec.pid_file.unlink()
+        logger.warning("pid file unreadable, cleared: service=%s content=%r", spec.name, content)
+        return None
+
+
+def _owned_process(spec: ServiceSpec, pid: int) -> psutil.Process | None:
+    # hima spawns services with start_new_session, so an owned pid is its
+    # own process-group leader. AccessDenied means another user's process
+    # reused the pid; ZombieProcess (a NoSuchProcess subclass) means ours
+    # exited unreaped. Both leave the record stale.
     try:
         process = psutil.Process(pid)
         cmdline = " ".join(process.cmdline())
+        group_leader = os.getpgid(pid) == pid
+    except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
+        return None
+    if spec.process_keyword not in cmdline or not group_leader:
+        return None
+    return process
+
+
+def _exited(pid: int) -> bool:
+    # A dead child lingers as a zombie until reaped; both forms are exits.
+    try:
+        return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
-        spec.pid_file.unlink()
-        logger.info("service already exited: service=%s pid=%d", spec.name, pid)
+        return True
+
+
+def _log_tail(log_file: Path) -> str:
+    if not log_file.exists():
+        return "(no log output)"
+    data = log_file.read_bytes()[-LOG_TAIL_BYTES:]
+    return data.decode("utf-8", errors="replace").strip()
+
+
+def _terminate_group(spec: ServiceSpec, process: psutil.Process) -> None:
+    # Signal the whole group: ollama serve keeps model-runner children.
+    _signal_group(process.pid, signal.SIGTERM)
+    try:
+        process.wait(timeout=STOP_WAIT_S)
         return
-    if spec.process_keyword not in cmdline:
-        logger.warning("service stop skipped: service=%s pid=%d reason=pid_reused", spec.name, pid)
-        return
-    process.terminate()
-    process.wait(timeout=STOP_WAIT_S)
-    spec.pid_file.unlink()
-    logger.info("service stopped: service=%s pid=%d", spec.name, pid)
+    except psutil.TimeoutExpired:
+        logger.warning(
+            "service ignored SIGTERM: service=%s pid=%d escalating=SIGKILL",
+            spec.name,
+            process.pid,
+        )
+    _signal_group(process.pid, signal.SIGKILL)
+    try:
+        process.wait(timeout=KILL_WAIT_S)
+    except psutil.TimeoutExpired as error:
+        raise CommandError(
+            f"{spec.name}: pid {process.pid} survived SIGKILL; "
+            f"the process is likely stuck in uninterruptible I/O"
+        ) from error
+
+
+def _signal_group(pid: int, signum: int) -> None:
+    # The pid doubles as the group id (start_new_session at launch).
+    try:
+        os.killpg(pid, signum)
+    except ProcessLookupError:
+        logger.debug("signal skipped, group gone: pid=%d signal=%d", pid, signum)
 
 
 def _ollama_env(port: int) -> dict[str, str]:
