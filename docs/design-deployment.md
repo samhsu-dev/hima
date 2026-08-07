@@ -56,7 +56,7 @@ services, and their interfaces. No classes; components only.
 
 | Service | Image | Command | Ports | Data |
 |---------|-------|---------|-------|------|
-| `advisor` | advisor | `uvicorn --factory hima_dht_game.advisor:create_default_app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
+| `advisor` | advisor | `uvicorn --factory hima_dht_game.app:create_default_app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
 | `ollama` | ollama pinned | default | 11434 | `ollama` volume |
 | `leader-baked` | leader baked | default | 11434 | weights in image |
 | `webui` | webui | `uvicorn --factory hima_dht_web.server:create_default_app --host 0.0.0.0 --port 8123` | 8123 | `./runs`, `./tmp` bind mounts (read-only) |

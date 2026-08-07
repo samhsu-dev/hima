@@ -84,7 +84,7 @@ You can pass your API key as a command-line argument when running `python -m him
 **Third**, download our imitation-based agent from Hugging Face and launch it as a local server.  
 👉 Model URL: [https://huggingface.co/SNUMPR/Protoss-a](https://huggingface.co/SNUMPR/Protoss-a)
 
-Refer to `packages/hima-dht-game/src/hima_dht_game/advisor.py` for an example of how to serve the model using **FastAPI**.  
+Refer to `packages/hima-dht-game/src/hima_dht_game/app.py` for an example of how to serve the model using **FastAPI**.  
 The server runs on `localhost`, and the default port is `8080`.
 
 You can change the port by passing the following argument to `python -m hima_dht_game`:  

@@ -44,19 +44,19 @@ the contracts between them. Per-member internals: `design-cli.md`,
   sampling during play — and the advisor inference service the bot's agent
   logic talks to. Co-located on user decision: agent-logic changes evolve
   the bot side and the advisor interface together, in one package.
-- **Modules**: `game.py` (entry: argument parsing + `main()`), `__main__.py`
+- **Modules**: `main.py` (entry: argument parsing + `main()`), `__main__.py`
   (`sys.exit(main())`), `bot.py`, `sampler.py` (`GameSampler`, moved from the
-  web records module — the sc2-dependent record writer), `actions.py`,
-  `constants.py`, `prompt.py`, `bots/`, `prompts/`; `advisor.py` (the advisor
+  web records module — the sc2-dependent record writer), `utils.py`,
+  `constants.py`, `prompt.py`, `bots/`, `prompts/`; `app.py` (the advisor
   service: model trio constant, model loading, serialized generation — MPS
   single-worker constraint — request schema, routes, `create_app(advisors)`
-  and the zero-argument `create_default_app`). `advisor.py` is addressed by
+  and the zero-argument `create_default_app`). `app.py` is addressed by
   module path only, never imported by `__init__.py` or the game modules: it
   needs the `advisor` extra, and bot↔advisor interaction stays HTTP.
 - **Invocation**: game — `python -m hima_dht_game`; output folders resolve
   from `--save_path` as given (absolute, or relative to the invoking
   process's working directory); the package never computes a repository
-  root. Advisor — `uvicorn --factory hima_dht_game.advisor:create_default_app`;
+  root. Advisor — `uvicorn --factory hima_dht_game.app:create_default_app`;
   models load in the application lifespan: import stays side-effect free and
   `/health` reachability still implies readiness.
 - **Value placement**: the model trio is a constant (no run overrides it);

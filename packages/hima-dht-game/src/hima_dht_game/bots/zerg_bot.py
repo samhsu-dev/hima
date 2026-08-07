@@ -1,5 +1,5 @@
 import math
-from hima_dht_game import actions
+from hima_dht_game import utils
 import random
 from hima_dht_game.bot import HIMA
 from hima_dht_game.constants import MAP_RAMPS
@@ -15,7 +15,7 @@ class Zerg_Bot(HIMA):
         self.warning_range = 20
         self.townhall_queens = {}
         self.scout_unit = UnitTypeId.DRONE
-        self.troop = actions.Troop(self, attack_threshold=60)
+        self.troop = utils.Troop(self, attack_threshold=60)
         super().__init__(args)
 
     async def unit_attack(self, units):

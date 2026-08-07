@@ -1,5 +1,5 @@
 import sys
 
-from hima_dht_game.game import main
+from hima_dht_game.main import main
 
 sys.exit(main())

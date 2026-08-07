@@ -1,5 +1,5 @@
 import math
-from hima_dht_game import actions
+from hima_dht_game import utils
 import random
 from hima_dht_game.bot import HIMA
 from sc2.position import Point2
@@ -14,7 +14,7 @@ class Protoss_Bot(HIMA):
     def __init__(self, args):
         self.warning_range = 10
         self.scout_unit = UnitTypeId.PROBE
-        self.troop = actions.Troop(self)
+        self.troop = utils.Troop(self)
         super().__init__(args)
 
     async def unit_attack(self, units):
