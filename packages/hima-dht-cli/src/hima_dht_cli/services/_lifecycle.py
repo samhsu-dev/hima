@@ -1,13 +1,17 @@
 """Service lifecycle orchestration: backend dispatch for up/down/status."""
 
+import fcntl
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import psutil
 
-from hima_dht_cli.workspace import SC2_APP
+from hima_dht_cli.errors import CommandError
+from hima_dht_cli.workspace import SC2_APP, SERVICE_DIR
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 
 from . import _docker, _native
@@ -29,6 +33,10 @@ DEFAULT_ADVISOR_PORT = 8090
 DEFAULT_OLLAMA_PORT = 11434
 DEFAULT_LEADER_MODEL = "qwen3:8b"
 
+# Serializes `up` and `down`; two concurrent runs would race on pid
+# files and the manifest.
+LOCK_FILE = SERVICE_DIR / "up-down.lock"
+
 
 @dataclass(frozen=True)
 class ServiceOptions:
@@ -43,31 +51,48 @@ class ServiceOptions:
 
 def up(options: ServiceOptions, skip_pull: bool, manifest_out: Path | None = None) -> None:
     """Start the service trio on the selected backend and record the manifest."""
-    if options.backend is ServiceBackend.DOCKER:
-        manifest = _up_docker(options, skip_pull)
-    else:
-        manifest = _up_native(options, skip_pull)
-    write_manifest(manifest)
-    if manifest_out is not None:
-        write_manifest(manifest, manifest_out)
+    with _mutual_exclusion():
+        if options.backend is ServiceBackend.DOCKER:
+            manifest = _up_docker(options, skip_pull)
+        else:
+            manifest = _up_native(options, skip_pull)
+        write_manifest(manifest)
+        if manifest_out is not None:
+            write_manifest(manifest, manifest_out)
     print(f"all services healthy; manifest: {MANIFEST_FILE}")
 
 
 def down() -> None:
     """Stop the services recorded by the last `up` and remove the manifest."""
-    manifest = read_manifest()
-    if manifest is not None and manifest.backend is ServiceBackend.DOCKER:
-        _docker.compose_stop()
-    else:
-        if manifest is None:
-            logger.info("no service manifest: sweeping native pid files")
-        for spec in (
-            _native.webui_spec(DEFAULT_WEBUI_PORT),
-            _native.advisor_spec(DEFAULT_ADVISOR_PORT),
-            _native.ollama_spec(DEFAULT_OLLAMA_PORT),
-        ):
-            _native.stop_one(spec)
-    remove_manifest()
+    with _mutual_exclusion():
+        manifest = read_manifest()
+        if manifest is not None and manifest.backend is ServiceBackend.DOCKER:
+            _docker.compose_stop()
+        else:
+            if manifest is None:
+                logger.info("no service manifest: sweeping native pid files")
+            for spec in (
+                _native.webui_spec(DEFAULT_WEBUI_PORT),
+                _native.advisor_spec(DEFAULT_ADVISOR_PORT),
+                _native.ollama_spec(DEFAULT_OLLAMA_PORT),
+            ):
+                _native.stop_one(spec)
+        remove_manifest()
+
+
+@contextmanager
+def _mutual_exclusion() -> Iterator[None]:
+    # flock releases on close or process exit, so a crashed holder never
+    # wedges the lock.
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOCK_FILE, "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise CommandError(
+                "another `hima up` or `hima down` holds the service lock; wait for it to finish"
+            ) from error
+        yield
 
 
 def status(options: ServiceOptions) -> bool:

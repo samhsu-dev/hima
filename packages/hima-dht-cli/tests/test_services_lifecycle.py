@@ -12,18 +12,22 @@ Test cases:
   routes `down` to compose stop and removes the manifest.
 - test_down_without_manifest_sweeps_native_in_reverse_order: no manifest
   sweeps webui, advisor, then ollama pid files.
+- test_down_blocked_by_held_service_lock: a held service lock makes
+  `down` raise instead of racing the holder.
 - test_status_probes_manifest_endpoints: status builds every probe URL
   and the leader root from the recorded manifest, not from options.
 - test_status_flags_foreign_endpoint_with_dead_pid: a reachable endpoint
   whose recorded pid is gone fails the check as a foreign process.
 """
 
+import fcntl
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from hima_dht_cli import services
+from hima_dht_cli.errors import CommandError
 from hima_dht_cli.services import _docker, _lifecycle, _native
 
 
@@ -120,6 +124,17 @@ def test_down_without_manifest_sweeps_native_in_reverse_order(
     services.down()
 
     assert stopped == ["webui", "advisor", "ollama"]
+
+
+def test_down_blocked_by_held_service_lock() -> None:
+    # flock conflicts between two open file descriptions even within one
+    # process, so holding the lock here blocks the `down` call.
+    _lifecycle.LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_lifecycle.LOCK_FILE, "w") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        with pytest.raises(CommandError, match="service lock"):
+            services.down()
 
 
 def _docker_manifest(ollama_endpoint: str) -> services.ServiceManifest:
