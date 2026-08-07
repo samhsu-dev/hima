@@ -64,6 +64,10 @@ services, and their interfaces. No classes; components only.
   directory (`design-packages.md`); each service's `WORKDIR` is the directory
   holding the `runs/` and `tmp/` bind mounts.
 
+- Service lifecycle boundary: `hima up`/`down`/`status` manage the long-lived
+  prerequisite services only (`ollama`/`leader-baked`, `advisor`, `webui`). The
+  `game` service is a one-shot job in the run lifecycle: launched per game via
+  the `game` profile, exits with the run, never managed by `up`/`down`.
 - `ollama` and `leader-baked` are alternatives on the same port; `baked` profile
   selects the second.
 - `advisor` serves `GET /health`, ready only after model loading completes; the
