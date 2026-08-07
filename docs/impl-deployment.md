@@ -64,6 +64,9 @@
   `docker build --platform linux/amd64 -t hima:amd64 -f docker/hima.Dockerfile .`.
 - Compose forwards `SC2_LICENSE` from the environment (`${SC2_LICENSE:-}`); an
   empty value fails the guard layer naming the argument before any download.
+- Compose `${VAR:-default}` interpolation reads the `.env` beside
+  `docker-compose.yml`; an exported environment variable overrides the `.env`
+  value. The published-port defaults live in `.env.example`.
 - python:3.12-slim has no curl; the advisor healthcheck runs
   `python -c "urllib.request.urlopen(...)"` from the image venv on PATH.
 - The ladder map is not redistributable: `docker/maps/` is gitignored and filled

@@ -26,7 +26,9 @@ services:
     environment:
       HF_HOME: /models
     ports:
-      - "8090:8090"
+      # Published ports interpolate from .env (.env.example); the container-
+      # internal ports stay fixed so service-name endpoints never change.
+      - "${HIMA_ADVISOR_PORT:-8090}:8090"
     volumes:
       - hf-cache:/models
     healthcheck:
@@ -43,7 +45,7 @@ services:
     image: hima
     command: hima serve --host 0.0.0.0
     ports:
-      - "8123:8123"
+      - "${HIMA_WEBUI_PORT:-8123}:8123"
     volumes:
       - ./runs:/app/runs:ro
       - ./tmp:/app/tmp:ro
