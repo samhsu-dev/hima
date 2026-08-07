@@ -101,13 +101,17 @@ Each command module exposes one public entry consumed by `cli`.
 - **status(options) -> None** (`services`) — Behavior: report advisor health, webui
   health, Ollama health, leader model presence, and SC2 installation path.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
-  Behavior: precheck services, invoke `python -m hima_dht_game` with `--num_server 1` (keeps the
+  Behavior: precheck the advisor health endpoint and the leader endpoint's
+  OpenAI-compatible model list (`GET {base_url}/models` with the bearer key —
+  endpoint-agnostic: Ollama, vLLM, or a hosted provider), invoke
+  `python -m hima_dht_game` with `--num_server 1` (keeps the
   advisor port independent of `--seed`), stream its output, then archive
   `tmp/{command,input,output,prompt}.txt`, `metric.json`, `frames.jsonl`, and the
   result-named replay into `runs/<replay-stem>/`, and print the metric summary.
   Input: difficulty, enemy race, seed, port, advisor host (default `localhost`,
   forwarded as `--advisor_host` for containerized runs), leader model,
-  base URL, realtime flag.
+  base URL, API key (default `ollama` — Ollama ignores it; a remote provider
+  needs its real key, forwarded as `--LLM_api_key`), realtime flag.
   Errors: `CommandError` on unhealthy services or non-zero exit of `hima_dht_game`.
 - **metrics() -> None** (`metrics`) — Behavior: read every `runs/*/metric.json`
   plus an unarchived `tmp/metric.json`, print one aligned table

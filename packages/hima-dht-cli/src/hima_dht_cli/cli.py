@@ -4,6 +4,7 @@ Defaults resolve as: CLI flag > exported environment > `.env` in the
 working directory (shared with docker compose interpolation) > code default.
 Environment lookup is declared per option via typer `envvar`.
 """
+
 import sys
 from enum import Enum
 from pathlib import Path
@@ -18,12 +19,18 @@ from hima_dht_cli import experiment, services, viewer
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.metrics import report
 from hima_dht_cli.replay import play
-from hima_dht_cli.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
+from hima_dht_cli.services import (
+    DEFAULT_ADVISOR_HOST,
+    DEFAULT_ADVISOR_PORT,
+    DEFAULT_LEADER_MODEL,
+)
 from hima_dht_cli.workspace import RUN_ROOT
 from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
 from hima_dht_web import server
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
+# Ollama accepts any bearer token; a remote provider needs its real key.
+DEFAULT_LEADER_API_KEY = "ollama"
 
 # Environment keys shared with docker-compose.yml interpolation (.env.example).
 ENV_ADVISOR_HOST = "HIMA_ADVISOR_HOST"
@@ -32,6 +39,7 @@ ENV_WEBUI_HOST = "HIMA_WEBUI_HOST"
 ENV_WEBUI_PORT = "HIMA_WEBUI_PORT"
 ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
 ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
+ENV_LEADER_API_KEY = "HIMA_LEADER_API_KEY"
 
 
 class Difficulty(str, Enum):
@@ -114,19 +122,23 @@ def run(
     advisor_host: Annotated[str, typer.Option(envvar=ENV_ADVISOR_HOST)] = DEFAULT_ADVISOR_HOST,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
     base_url: Annotated[str, typer.Option(envvar=ENV_LEADER_BASE_URL)] = DEFAULT_LEADER_BASE_URL,
+    api_key: Annotated[str, typer.Option(envvar=ENV_LEADER_API_KEY)] = DEFAULT_LEADER_API_KEY,
     realtime: Annotated[bool, typer.Option("--realtime")] = False,
 ) -> None:
     """Play one game and archive its outputs under runs/."""
-    experiment.run(experiment.RunOptions(
-        difficulty=difficulty.value,
-        enemy_race=enemy_race.value,
-        seed=seed,
-        port=port,
-        advisor_host=advisor_host,
-        model=model,
-        base_url=base_url,
-        realtime=realtime,
-    ))
+    experiment.run(
+        experiment.RunOptions(
+            difficulty=difficulty.value,
+            enemy_race=enemy_race.value,
+            seed=seed,
+            port=port,
+            advisor_host=advisor_host,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            realtime=realtime,
+        )
+    )
 
 
 @app.command()

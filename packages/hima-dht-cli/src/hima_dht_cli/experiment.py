@@ -1,4 +1,5 @@
 """Run one experiment game and archive its outputs under runs/."""
+
 import json
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ class RunOptions:
     advisor_host: str
     model: str
     base_url: str
+    api_key: str
     realtime: bool
 
 
@@ -35,33 +37,52 @@ def run(options: RunOptions) -> None:
 def _require_services(options: RunOptions) -> None:
     if not services.advisor_healthy(options.advisor_host, options.port):
         raise CommandError(
-            f"advisor server not healthy at {options.advisor_host}:{options.port} — run `hima up`")
-    root = _leader_root(options.base_url)
-    if not services.ollama_healthy(root):
-        raise CommandError(f"ollama not healthy at {root} — run `hima up`")
-    if not services.leader_model_present(root, options.model):
-        raise CommandError(f"leader model {options.model} absent — run `hima up`")
+            f"advisor server not healthy at {options.advisor_host}:{options.port} — run `hima up`"
+        )
+    served = services.leader_models(options.base_url, options.api_key)
+    if served is None:
+        raise CommandError(
+            f"leader endpoint not reachable at {options.base_url} — "
+            "run `hima up` or check --base-url / HIMA_LEADER_BASE_URL"
+        )
+    if not _model_served(options.model, served):
+        raise CommandError(
+            f"leader model {options.model} not served at {options.base_url} — "
+            "run `hima up` or check --model / HIMA_LEADER_MODEL"
+        )
 
 
-def _leader_root(base_url: str) -> str:
-    """The Ollama server root behind an OpenAI-compatible base URL."""
-    return base_url.removesuffix("/v1")
+def _model_served(model: str, served: list[str]) -> bool:
+    return any(name == model or name.startswith(f"{model}:") for name in served)
 
 
 def _invoke_game(options: RunOptions) -> None:
     argv = [
-        sys.executable, "-m", "hima_dht_game", "--mode", "bot",
+        sys.executable,
+        "-m",
+        "hima_dht_game",
+        "--mode",
+        "bot",
         # --num_server 1 keeps bot.py's advisor port (seed % num_server + port)
         # equal to --port for every seed; hima manages a single advisor server.
-        "--num_server", "1",
-        "--port", str(options.port),
-        "--advisor_host", options.advisor_host,
-        "--LLM_api_text", options.model,
-        "--LLM_base_url", options.base_url,
-        "--LLM_api_key", "ollama",
-        "--difficulty", options.difficulty,
-        "--enemy_race", options.enemy_race,
-        "--seed", str(options.seed),
+        "--num_server",
+        "1",
+        "--port",
+        str(options.port),
+        "--advisor_host",
+        options.advisor_host,
+        "--LLM_api_text",
+        options.model,
+        "--LLM_base_url",
+        options.base_url,
+        "--LLM_api_key",
+        options.api_key,
+        "--difficulty",
+        options.difficulty,
+        "--enemy_race",
+        options.enemy_race,
+        "--seed",
+        str(options.seed),
     ]
     if options.realtime:
         argv.append("--realtime")

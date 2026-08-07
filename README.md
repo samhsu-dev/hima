@@ -11,10 +11,15 @@ and retail StarCraft II 5.0.16 with the ladder map — game client setup in the
 [paper README](packages/hima-dht-game/README.md).
 
 ```sh
+brew install ollama   # macOS: native Ollama uses the Metal GPU; container VMs cannot
 git clone git@github.com:samhsu-dev/hima.git
 cd hima
 uv sync
 ```
+
+The leader runs on any OpenAI-compatible endpoint: point `HIMA_LEADER_BASE_URL`,
+`HIMA_LEADER_MODEL`, and `HIMA_LEADER_API_KEY` (see `.env.example`) at a remote
+provider to replace local Ollama.
 
 ## Usage
 

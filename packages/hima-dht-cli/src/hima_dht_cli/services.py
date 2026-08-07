@@ -1,4 +1,5 @@
 """Managed background services: advisor server, Ollama, and the webui."""
+
 import subprocess
 import sys
 import time
@@ -9,8 +10,8 @@ import psutil
 import requests
 
 from hima_dht_cli.errors import CommandError
-from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 from hima_dht_cli.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
+from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ADVISOR_HOST = "localhost"
@@ -44,9 +45,15 @@ def advisor_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="advisor",
         argv=[
-            sys.executable, "-m", "uvicorn",
-            "--factory", "hima_dht_game.app:create_default_app",
-            "--host", "127.0.0.1", "--port", str(port),
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "--factory",
+            "hima_dht_game.app:create_default_app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
         ],
         health_url=_advisor_health_url("127.0.0.1", port),
         pid_file=SERVICE_DIR / "advisor.pid",
@@ -58,8 +65,17 @@ def advisor_spec(port: int) -> ServiceSpec:
 def webui_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="webui",
-        argv=[sys.executable, "-m", "uvicorn", "--factory", "hima_dht_web.server:create_default_app",
-              "--host", "127.0.0.1", "--port", str(port)],
+        argv=[
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "--factory",
+            "hima_dht_web.server:create_default_app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
         health_url=f"http://127.0.0.1:{port}/api/games",
         pid_file=SERVICE_DIR / "webui.pid",
         log_file=SERVICE_DIR / "webui.log",
@@ -96,6 +112,20 @@ def leader_model_present(root: str, model: str) -> bool:
     return any(name == model or name.startswith(f"{model}:") for name in names)
 
 
+def leader_models(base_url: str, api_key: str) -> list[str] | None:
+    """Model ids served at an OpenAI-compatible endpoint; None when unreachable."""
+    try:
+        response = requests.get(
+            f"{base_url}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=3,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
+    return [entry["id"] for entry in response.json().get("data", [])]
+
+
 def _advisor_health_url(host: str, port: int) -> str:
     return f"http://{host}:{port}/health"
 
@@ -109,7 +139,11 @@ def up(options: ServiceOptions, skip_pull: bool) -> None:
 
 
 def down() -> None:
-    for spec in (webui_spec(DEFAULT_WEBUI_PORT), advisor_spec(DEFAULT_ADVISOR_PORT), ollama_spec()):
+    for spec in (
+        webui_spec(DEFAULT_WEBUI_PORT),
+        advisor_spec(DEFAULT_ADVISOR_PORT),
+        ollama_spec(),
+    ):
         print(_stop_one(spec))
 
 
@@ -127,7 +161,11 @@ def _collect_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
         ("advisor server", _healthy(advisor.health_url), advisor.health_url),
         ("webui server", _healthy(webui.health_url), webui.health_url),
         ("ollama server", ollama_healthy(OLLAMA_URL), OLLAMA_URL),
-        (f"leader model {model}", leader_model_present(OLLAMA_URL, model), "ollama tags"),
+        (
+            f"leader model {model}",
+            leader_model_present(OLLAMA_URL, model),
+            "ollama tags",
+        ),
         ("SC2 installation", SC2_APP.exists(), str(SC2_APP)),
     ]
     return checks
@@ -154,8 +192,11 @@ def _launch(spec: ServiceSpec) -> None:
     try:
         with open(spec.log_file, "ab") as log:
             process = subprocess.Popen(
-                spec.argv, cwd=RUN_ROOT,
-                stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                spec.argv,
+                cwd=RUN_ROOT,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
             )
     except FileNotFoundError as error:
         raise CommandError(f"{spec.name}: executable not found: {spec.argv[0]}") from error

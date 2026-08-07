@@ -69,3 +69,11 @@
   `python -c "urllib.request.urlopen(...)"` from the image venv on PATH.
 - The ladder map lives in the git-tracked `maps/`; the game image COPYs it from
   there. No `docker/maps/` staging directory.
+- macOS container VMs (Docker Desktop, OrbStack) expose no Apple-GPU
+  passthrough: a containerized Ollama runs CPU-only. The leader runs on native
+  Ollama (`brew install ollama`); the compose `ollama` service targets Linux
+  hosts (NVIDIA block commented in `docker-compose.yml`).
+- Leader portability lives in the endpoint contract, not the engine: `hima run`
+  prechecks `GET {HIMA_LEADER_BASE_URL}/models` with `HIMA_LEADER_API_KEY` as
+  bearer token, so any OpenAI-compatible server (Ollama, vLLM, hosted
+  providers) serves the leader.

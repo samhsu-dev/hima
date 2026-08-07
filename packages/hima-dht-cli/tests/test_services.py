@@ -8,13 +8,21 @@ Test cases:
   the leader model, the advisor, then the webui.
 - test_down_stops_services_in_reverse_order: `hima down` stops the webui,
   the advisor, then ollama.
+- test_leader_models_lists_openai_endpoint: the endpoint check GETs
+  {base_url}/models with the bearer key and returns the served ids.
+- test_leader_models_none_when_unreachable: a request failure yields None,
+  distinct from an empty served list.
 """
+
 import pytest
+import requests
 
 from hima_dht_cli import services
 
 
-def test_ensure_leader_model_queries_local_ollama_root(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ensure_leader_model_queries_local_ollama_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     queried: dict = {}
 
     def fake_leader_model_present(root: str, model: str) -> bool:
@@ -27,7 +35,9 @@ def test_ensure_leader_model_queries_local_ollama_root(monkeypatch: pytest.Monke
     assert queried["endpoint"] == (services.OLLAMA_URL, "qwen3:8b")
 
 
-def test_up_ensures_services_in_dependency_order(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_up_ensures_services_in_dependency_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     order: list[str] = []
 
     def fake_ensure_service(spec: services.ServiceSpec) -> None:
@@ -54,3 +64,35 @@ def test_down_stops_services_in_reverse_order(monkeypatch: pytest.MonkeyPatch) -
     services.down()
 
     assert stopped == ["webui", "advisor", "ollama"]
+
+
+def test_leader_models_lists_openai_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    requested: dict = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {"object": "list", "data": [{"id": "qwen3:8b"}, {"id": "llama3:8b"}]}
+
+    def fake_get(url: str, headers: dict, timeout: int) -> FakeResponse:
+        requested["url"] = url
+        requested["headers"] = headers
+        return FakeResponse()
+
+    monkeypatch.setattr(services.requests, "get", fake_get)
+    served = services.leader_models("http://localhost:11434/v1", "secret")
+
+    assert served == ["qwen3:8b", "llama3:8b"]
+    assert requested["url"] == "http://localhost:11434/v1/models"
+    assert requested["headers"] == {"Authorization": "Bearer secret"}
+
+
+def test_leader_models_none_when_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_get(url: str, headers: dict, timeout: int) -> None:
+        raise requests.ConnectionError("refused")
+
+    monkeypatch.setattr(services.requests, "get", fake_get)
+
+    assert services.leader_models("http://localhost:11434/v1", "ollama") is None
