@@ -12,7 +12,7 @@
   `serve()`; a bound port exits via `sys.exit(3)` (`uvicorn.config.STARTUP_FAILURE`),
   never raises `OSError` to the caller — catch `SystemExit` and check `code`.
 - **[burnysc2]** sampler reads the same AI fields `ReplayExporter.on_step` already
-  samples (`src/hima_dht/export.py`); `BotAI` and `ObserverAI` expose that shared surface.
+  samples (`hima_dht_cli.export`); `BotAI` and `ObserverAI` expose that shared surface.
 - **[asyncio]** live tail = poll loop: read new lines from a saved byte offset, then
   `await asyncio.sleep(interval)`; no external tailing library.
 
@@ -25,13 +25,30 @@
 ## Developer instructions
 
 - Record file writes: hold one file handle, `write` + `flush` per record line.
-- Template injection: reuse the placeholder replacement `viewer.py` performs on
-  `src/hima_dht/player_template.html`; the server injects per request.
+- Template injection: `server.render` replaces the payload placeholder in
+  `hima_dht_web/_resources/templates/player_template.html`; `hima_dht_cli.viewer`
+  reuses it for the standalone export.
 - SSE probe pattern for tests: uvicorn server on a thread, `urllib` client
   (scratchpad `sse_probe.py` shape).
 
 ## Design-specific
 
+- JHU design system source: Johns Hopkins visual identity
+  (brand.jhu.edu/visual-identity) — palette and type verified against the local
+  render-doc stylesheet; tokens are inlined per page, no external fetch.
+- Light tokens: heritage `#002d72`, spirit `#68ace5`, green `#008767`,
+  red `#a6192e`, sand `#8a6a2f`, paper `#ffffff`, ink `#1c1a17`,
+  ink-quiet `#5d5750`, rule `#c9c5be`, rule-faint `#e6e3dd`, wash `#f5f3ef`.
+- Dark tokens: heritage `#9dc4ee`, green `#5cb99f`, red `#e08b7c`,
+  sand `#cba052`, paper `#14161a`, ink `#e4e1db`, ink-quiet `#a49e95`,
+  rule `#3b3f47`, rule-faint `#262a30`, wash `#1b1e23`; spirit unchanged.
+- Type stacks: serif `"Source Serif 4", Charter, Georgia, serif`; sans
+  `"Work Sans", "Helvetica Neue", system-ui, sans-serif`; mono
+  `ui-monospace, Menlo, monospace`. Named faces degrade to system faces.
+- Theme switch: `@media (prefers-color-scheme: dark)` plus `:root[data-theme]`
+  overrides in both directions; canvas colors come from
+  `getComputedStyle(document.documentElement).getPropertyValue`, re-read on a
+  `matchMedia("(prefers-color-scheme: dark)")` change event.
 - Browser side uses the native `EventSource` API; the page enters live mode on the
   payload flag `live: true`.
 - Mid-game join without gap: fold the record file's complete lines, remember their

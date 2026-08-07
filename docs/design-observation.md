@@ -26,12 +26,32 @@ infrastructure over an already-confirmed record vocabulary, no non-trivial algor
 - **Dependency roles**: Data holders: record dicts (schema below), `StreamCursor`
   (one client's stream progress: record byte offset, decision and command entry
   counts). Orchestrator: `server`. Helpers: `records`, `logs`, `games`, `stream`.
-- **Assets**: `player_template.html` (`hima_dht_web/_resources/templates/`,
-  read via `importlib.resources`) gains a live-mode section: when the injected
+- **Assets**: `player_template.html` and `index_template.html`
+  (`hima_dht_web/_resources/templates/`, read via `importlib.resources`).
+  The player template gains a live-mode section: when the injected
   payload carries `live: true`, the page subscribes to the record stream and appends
-  incoming records; all rendering code is shared with replay mode. The template
-  lives in the web member so the webui image is self-contained; `hima_dht_cli.viewer`
-  reuses `server.render` for the standalone export.
+  incoming records; all rendering code is shared with replay mode. The templates
+  live in the web member so the webui image is self-contained; `hima_dht_cli.viewer`
+  reuses `server.render` for the standalone export. The index template carries the
+  placeholder `__HIMA_ROWS__`; the server injects one table row per game.
+
+## Page Design System
+
+Both browser pages (game list and observation) share one visual identity: the
+JHU palette and type system recorded in `impl-observation.md`, declared as CSS
+custom properties inline in each page — no external fetch.
+
+- **Themes**: light and dark, from `prefers-color-scheme` with
+  `:root[data-theme]` overrides; the observation page's canvas reads its colors
+  from the computed custom properties and redraws on scheme change.
+- **Color semantics**: own units Heritage/Spirit Blue, enemy units Dark Red,
+  minerals Spirit Blue, vespene Homewood Green; result badges Victory green,
+  Defeat red, Tie quiet, live Spirit Blue.
+- **Observation page additions**: a unit-color legend in the header, keyboard
+  playback control (space toggles play, arrow keys seek), and unit
+  identification on canvas hover (type name and health).
+- **Game list page**: one table row per game — id linking to its observation
+  page, result badge, duration.
 
 ## Record Schema (`records`)
 

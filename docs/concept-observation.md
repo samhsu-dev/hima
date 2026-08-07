@@ -1,4 +1,4 @@
-# Concept — Game Observation (`src/hima_dht/web/`)
+# Concept — Game Observation (`packages/hima-dht-web/`)
 
 ## 1. Context
 
