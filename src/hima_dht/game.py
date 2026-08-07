@@ -10,7 +10,6 @@ from hima_dht.bots.swarmbrain import SwarmBrain
 from hima_dht.bots.terran_bot import Terran_Bot
 from hima_dht.bots.protoss_bot import Protoss_Bot
 from hima_dht.bots.textstarcraft import TextStarCraft
-from hima_dht.workspace import REPO_ROOT
 
 
 if __name__ == '__main__':
@@ -58,8 +57,8 @@ if __name__ == '__main__':
     args.difficulty = Difficulty[args.difficulty]
     args.current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    temp_replay_folder = os.path.join(str(REPO_ROOT), args.save_path)
-    os.makedirs(os.path.join(temp_replay_folder), exist_ok=True)
+    temp_replay_folder = args.save_path
+    os.makedirs(temp_replay_folder, exist_ok=True)
     temp_replay_path = f'{temp_replay_folder}/{args.current_time}_{args.difficulty}_{args.enemy_race}_temp.SC2Replay'
     if args.own_race == Race.Protoss:
         our_bot = Protoss_Bot(args)

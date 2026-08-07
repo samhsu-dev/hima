@@ -10,7 +10,6 @@ from openai import OpenAI
 from collections import deque
 from sc2.bot_ai import BotAI
 from hima_dht.prompts.agent_prompt import *
-from hima_dht.workspace import REPO_ROOT
 from typing import Set, List
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.buff_id import BuffId
@@ -331,7 +330,7 @@ class TextStarCraft(BotAI):
                              temperature=self.temperature, system_prompt=self.system_prompt,
                              example_prompt=self.example_prompt, chunk_window=self.chunk_window,
                              prompt_type='v4')
-        self.game_folder = os.path.join(str(REPO_ROOT), args.save_path, 'agent')
+        self.game_folder = os.path.join(args.save_path, 'agent')
         os.makedirs(self.game_folder, exist_ok=True)
 
         self.iteration = 0

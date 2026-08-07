@@ -8,7 +8,7 @@ from pathlib import Path
 
 from hima_dht import services
 from hima_dht.errors import CommandError
-from hima_dht.workspace import GAME_OUTPUTS, REPO_ROOT, RUNS_DIR, TMP_DIR
+from hima_dht.workspace import GAME_OUTPUTS, RUN_ROOT, RUNS_DIR, TMP_DIR
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ def _invoke_game(options: RunOptions) -> None:
     ]
     if options.realtime:
         argv.append("--realtime")
-    completed = subprocess.run(argv, cwd=REPO_ROOT)
+    completed = subprocess.run(argv, cwd=RUN_ROOT)
     if completed.returncode != 0:
         raise CommandError(f"hima_dht.game exited with code {completed.returncode}")
 

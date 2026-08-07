@@ -9,7 +9,6 @@ import sysconfig
 from pathlib import Path
 
 from hima_dht.errors import CommandError
-from hima_dht.workspace import REPO_ROOT
 
 _COLORS_TARGET = "random.shuffle(palette, lambda: 0.5)  # Return a fixed shuffle"
 _COLORS_MARKER = "replicate the"
@@ -188,7 +187,8 @@ def _replace_line(text: str, target: str, block, path: Path):
 
 def _run_uv_sync() -> None:
     try:
-        completed = subprocess.run(["uv", "sync"], cwd=REPO_ROOT)
+        # uv discovers the workspace by walking up from the working directory.
+        completed = subprocess.run(["uv", "sync"])
     except FileNotFoundError as error:
         raise CommandError("uv not found on PATH — install from https://docs.astral.sh/uv/") from error
     if completed.returncode != 0:

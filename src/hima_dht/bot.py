@@ -17,7 +17,7 @@ from collections import Counter
 from sc2.ids.unit_typeid import UnitTypeId
 
 from hima_dht.web.records import GameSampler
-from hima_dht.workspace import RECORD_FILE, REPO_ROOT
+from hima_dht.workspace import RECORD_FILE
 
 
 class HIMA(BotAI):
@@ -32,7 +32,7 @@ class HIMA(BotAI):
         self.action = actions.ActionDescriptions(self.own_race)
         self.text_prompt = self.prompt.generate_prompts()
         self.action_extractor = actions.ActionExtractor(constants.ACTION_DICT[self.own_race], self.own_race)
-        self.game_folder = os.path.join(str(REPO_ROOT), args.save_path)
+        self.game_folder = args.save_path
 
         with open(os.path.join(self.game_folder, 'prompt.txt'), "a", encoding='utf-8') as file:
             file.write(f"{self.text_prompt}")

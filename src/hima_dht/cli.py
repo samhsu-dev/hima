@@ -1,7 +1,7 @@
 """hima console entry: argument parsing and delegation only.
 
-Defaults resolve as: CLI flag > exported environment > `.env` at the repo
-root (shared with docker compose interpolation) > code default.
+Defaults resolve as: CLI flag > exported environment > `.env` in the
+working directory (shared with docker compose interpolation) > code default.
 """
 import argparse
 import os
@@ -15,7 +15,7 @@ from hima_dht.errors import CommandError
 from hima_dht.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
 from hima_dht.web import server
 from hima_dht.web.records import DEFAULT_SAMPLE_INTERVAL
-from hima_dht.workspace import REPO_ROOT
+from hima_dht.workspace import RUN_ROOT
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
 DIFFICULTIES = (
@@ -34,7 +34,7 @@ ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
 
 
 def main() -> int:
-    load_dotenv(REPO_ROOT / ".env")
+    load_dotenv(RUN_ROOT / ".env")
     try:
         args = _build_parser().parse_args()
         args.func(args)

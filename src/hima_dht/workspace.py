@@ -1,10 +1,11 @@
 """Filesystem layout shared by every hima command."""
 from pathlib import Path
 
-# src layout: workspace.py sits at src/hima_dht/, two levels below the repo root.
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-TMP_DIR = REPO_ROOT / "tmp"
-RUNS_DIR = REPO_ROOT / "runs"
+# The run layout anchors to the invoking process's working directory; `hima`
+# runs from the repository root or any chosen run directory.
+RUN_ROOT = Path.cwd()
+TMP_DIR = RUN_ROOT / "tmp"
+RUNS_DIR = RUN_ROOT / "runs"
 SERVICE_DIR = TMP_DIR / "services"
 SC2_APP = Path("/Applications/StarCraft II")
 

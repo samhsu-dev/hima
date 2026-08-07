@@ -11,7 +11,7 @@ import requests
 from hima_dht import patches
 from hima_dht.errors import CommandError
 from hima_dht.web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
-from hima_dht.workspace import REPO_ROOT, SC2_APP, SERVICE_DIR
+from hima_dht.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ADVISOR_HOST = "localhost"
@@ -152,7 +152,7 @@ def _launch(spec: ServiceSpec) -> None:
     try:
         with open(spec.log_file, "ab") as log:
             process = subprocess.Popen(
-                spec.argv, cwd=REPO_ROOT,
+                spec.argv, cwd=RUN_ROOT,
                 stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
             )
     except FileNotFoundError as error:

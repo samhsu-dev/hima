@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 from hima_dht.errors import CommandError
-from hima_dht.workspace import REPO_ROOT
 
 
 def play(replay_path: Path) -> None:
@@ -18,4 +17,4 @@ def play(replay_path: Path) -> None:
         "--rgb_screen_size", "0",
         "--rgb_minimap_size", "0",
     ]
-    subprocess.run(argv, cwd=REPO_ROOT)
+    subprocess.run(argv)
