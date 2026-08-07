@@ -10,6 +10,7 @@ from hima_dht.bots.swarmbrain import SwarmBrain
 from hima_dht.bots.terran_bot import Terran_Bot
 from hima_dht.bots.protoss_bot import Protoss_Bot
 from hima_dht.bots.textstarcraft import TextStarCraft
+from hima_dht.workspace import REPO_ROOT
 
 
 if __name__ == '__main__':
