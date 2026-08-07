@@ -1,33 +1,43 @@
-# Design — HIMA Operations CLI (`src/hima_dht/`)
+# Design — HIMA Operations CLI (`packages/hima-dht-cli/`)
 
 Command interface wrapping the project's internal behaviors: model services, experiment
-runs, metric aggregation, replay playback, and replay-to-HTML export. Installed as the
-`hima` console script via `pyproject.toml`. Phases Model and Spec are skipped: pure
+runs, metric aggregation, replay playback, and replay-to-HTML export. Workspace member
+`hima-dht-cli` (`design-packages.md`), import package `hima_dht_cli`, installed as the
+`hima` console script. Phases Model and Spec are skipped: pure
 infrastructure, no domain semantics, no non-trivial algorithm.
 
 ## Design Overview
 
 - **Classes**: `ServiceSpec`, `ServiceOptions`, `ReplayExporter`, `CommandError`
-- **Modules**: `cli` (dispatch), `workspace` (paths), `services`, `patches`,
-  `experiment`, `metrics`, `replay`, `export`, `viewer`; subpackage `web/`
-  (game observation — `concept-observation.md`, `design-observation.md`)
+- **Modules**: `cli` (typer application: one typed command function per
+  subcommand), `workspace` (run layout), `services`, `patches`,
+  `experiment`, `metrics`, `replay`, `export`, `viewer`. The observation webui
+  is the separate member `hima-dht-web` (`design-observation.md`).
 - **Relationships**: `cli` dispatches to every command module (one-way).
-  `viewer` uses `export` (frame data) and `web.logs` (decision and command parsing).
-  `export` uses `web.records` (record file written during re-simulation).
+  `viewer` uses `export` (frame data) and `hima_dht_web.logs` (decision and
+  command parsing). `export` uses `hima_dht_game.sampler` (record file written
+  during re-simulation) and `hima_dht_records` (folding).
   `experiment` uses `services` (health precheck) and `workspace`. `services`
-  contains `ServiceSpec` and uses `web.server` (webui default port and app
-  factory for the managed webui). `export` contains `ReplayExporter`. All command modules
-  use `workspace`.
+  contains `ServiceSpec` and uses `hima_dht_web.server` (webui default port and
+  app factory for the managed webui). `export` contains `ReplayExporter`. All
+  command modules use `workspace`.
 - **Abstract**: `sc2.observer_ai.ObserverAI` (implemented by `ReplayExporter`)
 - **Exceptions**: `CommandError` extends `Exception`, raised by every command module,
   handled only in `cli`
 - **Dependency roles**: Data holders: `ServiceSpec`, `ServiceOptions`.
   Orchestrator: `cli.main`. Helpers: all command modules (stateless functions).
-- **Defaults**: `cli` loads `.env` at the repo root on entry; argument
-  defaults resolve as CLI flag > exported environment > `.env` > code default.
-  The `HIMA_*` keys are shared with docker compose interpolation
-  (`.env.example`). Core modules never read the environment; they receive
-  resolved values.
+- **Defaults**: `cli` loads `.env` from the working directory on entry;
+  argument defaults resolve as CLI flag > exported environment > `.env` >
+  code default. Environment lookup is declared per option (typer `envvar`);
+  no hand-rolled resolution or conversion. The `HIMA_*` keys are shared with
+  docker compose interpolation (`.env.example`). Closed value sets
+  (difficulty, race) are enums. Core modules never read the environment;
+  they receive resolved values.
+- **Run layout**: `workspace` anchors `tmp/`, `runs/`, and the service state
+  directory to the invoking process's working directory (`RUN_ROOT`); `hima`
+  runs from the repository root or any chosen run directory. Directory names
+  come from the record contract (`hima_dht_records`); `SC2_APP` stays an
+  absolute macOS constant.
 - **Assets**: `player_template.html` — self-contained canvas player; `viewer` injects
   exported JSON into its placeholder to produce one standalone HTML file per replay.
   The observation server injects the same payload into the same template
@@ -79,8 +89,9 @@ Each command module exposes one public entry consumed by `cli`.
   Errors: `CommandError` when a target file is missing.
 - **up(options, skip_pull) -> None** (`services`) — Behavior: ensure the managed
   services in dependency order — `ollama serve`, the leader model (pulled when
-  absent unless `skip_pull`), the advisor FastAPI server (`uvicorn hima_dht.app:app`), the
-  observation webui (`uvicorn --factory` on `web.server`) — skipping any service
+  absent unless `skip_pull`), the advisor FastAPI server (`uvicorn --factory` on
+  `hima_dht_advisor.server`), the
+  observation webui (`uvicorn --factory` on `hima_dht_web.server`) — skipping any service
   already healthy; poll health endpoints a bounded number of attempts.
   Errors: `CommandError` when health is not reached within the attempt bound.
 - **down() -> None** (`services`) — Behavior: terminate PIDs recorded in pid files in
@@ -90,14 +101,14 @@ Each command module exposes one public entry consumed by `cli`.
 - **status(options) -> None** (`services`) — Behavior: report advisor health, webui
   health, Ollama health, leader model presence, SC2 installation path, and patch state.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
-  Behavior: precheck services, invoke `hima_dht.game` with `--num_server 1` (keeps the
+  Behavior: precheck services, invoke `python -m hima_dht_game` with `--num_server 1` (keeps the
   advisor port independent of `--seed`), stream its output, then archive
   `tmp/{command,input,output,prompt}.txt`, `metric.json`, `frames.jsonl`, and the
   result-named replay into `runs/<replay-stem>/`, and print the metric summary.
   Input: difficulty, enemy race, seed, port, advisor host (default `localhost`,
-  forwarded as `hima_dht.game --advisor_host` for containerized runs), leader model,
+  forwarded as `--advisor_host` for containerized runs), leader model,
   base URL, realtime flag.
-  Errors: `CommandError` on unhealthy services or non-zero exit of `hima_dht.game`.
+  Errors: `CommandError` on unhealthy services or non-zero exit of `hima_dht_game`.
 - **metrics() -> None** (`metrics`) — Behavior: read every `runs/*/metric.json`
   plus an unarchived `tmp/metric.json`, print one aligned table
   (result, time, agent_call, apu, rur, pbr). Errors: none; empty set prints a hint.

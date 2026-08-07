@@ -1,27 +1,31 @@
-# Design — Game Observation (`src/hima_dht/web/`)
+# Design — Game Observation (`packages/hima-dht-web/`, `packages/hima-dht-records/`)
 
-Concepts and terminology: `concept-observation.md`. Phases Model and Spec are skipped: pure
+Concepts and terminology: `concept-observation.md`. Workspace membership and the
+record contract: `design-packages.md`. Phases Model and Spec are skipped: pure
 infrastructure over an already-confirmed record vocabulary, no non-trivial algorithm
 (folding is sequential accumulation).
 
 ## Design Overview
 
-- **Classes**: `GameSampler`, `GameStore`, `StreamCursor`
-- **Modules**: `records` (schema: sampling and folding), `logs` (decision and command
+- **Classes**: `GameSampler` (`hima_dht_game.sampler`), `GameStore`, `StreamCursor`
+- **Modules**: `hima_dht_records.records` (record contract: schema constants and
+  folding); in `hima_dht_web`: `logs` (decision and command
   log parsing), `games` (game listing and payload assembly), `stream` (live game
   tailing), `server` (HTTP surface)
 - **Relationships**: `server` uses `games` and `stream` (one-way). `games` uses
-  `records` and `logs`. `stream` uses `logs`. `records` contains `GameSampler`.
+  `hima_dht_records` and `logs`. `stream` uses `logs`. `hima_dht_game.sampler`
+  contains `GameSampler` (the sc2-dependent record writer).
   `games` contains `GameStore`. `stream` contains `StreamCursor`.
-  The bot process uses `records` (sampling side only). `hima_dht.export` uses `records`
-  (writes the same record file during re-simulation). `hima_dht.viewer` uses `logs`.
+  The bot process uses `sampler`. `hima_dht_cli.export` uses `sampler`
+  (writes the same record file during re-simulation) and `hima_dht_records`
+  (folding). `hima_dht_cli.viewer` uses `logs`.
 - **Abstract**: none.
-- **Exceptions**: `CommandError` (from `hima_dht.errors`), raised by `server.serve` on
+- **Exceptions**: `CommandError` (from `hima_dht_cli.errors`), raised by `server.serve` on
   startup failure; per-request failures map to HTTP status codes.
 - **Dependency roles**: Data holders: record dicts (schema below), `StreamCursor`
   (one client's stream progress: record byte offset, decision and command entry
   counts). Orchestrator: `server`. Helpers: `records`, `logs`, `games`, `stream`.
-- **Assets**: `src/hima_dht/player_template.html` gains a live-mode section: when the injected
+- **Assets**: `player_template.html` (`hima_dht_cli`) gains a live-mode section: when the injected
   payload carries `live: true`, the page subscribes to the record stream and appends
   incoming records; all rendering code is shared with replay mode.
 
@@ -82,7 +86,7 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
   terminates the stream. Input: `tmp/` path, `StreamCursor`. Errors: none raised;
   an absent file reads as empty.
 - **parse_decisions(path) -> list[dict]**, **parse_commands(path) -> list[dict]**
-  (`logs`) — moved unchanged from `hima_dht.viewer`; absent file returns an empty list
+  (`logs`) — moved unchanged from the cli viewer module; absent file returns an empty list
   (the page renders without that panel).
 - **serve(host, port) -> None** (`server`) — Behavior: start the HTTP server with
   routes: game list page and JSON (`/`, `/api/games`), observation page and payload
@@ -99,14 +103,14 @@ commands}` — identical to the exported-page payload in `design-cli.md`.
   first, then resumes via query parameters: `records` (the payload's `stream.records`
   byte offset) plus `decisions` and `commands` (its entry counts).
 
-## Integration Changes (outside `src/hima_dht/web/`)
+## Integration Changes (outside the web member)
 
-- `bot.py` — instantiate `GameSampler(save_path/frames.jsonl)` in `on_start`, call
-  `step` in `on_step`, `finish` in `on_end`. Sampling adds no model or network calls.
-- `src/hima_dht/export.py` — `ReplayExporter` drives a `GameSampler` writing `frames.jsonl`
+- `hima_dht_game.bot` — instantiate `GameSampler(save_path/frames.jsonl)` in `on_start`,
+  call `step` in `on_step`, `finish` in `on_end`. Sampling adds no model or network calls.
+- `hima_dht_cli.export` — `ReplayExporter` drives a `GameSampler` writing `frames.jsonl`
   beside the replay's logs, then folds it; the exported page is unchanged.
-- `src/hima_dht/workspace.py` — `frames.jsonl` joins `GAME_OUTPUTS` so `hima run` archives it.
-- `src/hima_dht/cli.py` — new `serve` subcommand (`--host`, `--port`).
+- `hima_dht_cli.workspace` — `frames.jsonl` joins `GAME_OUTPUTS` so `hima run` archives it.
+- `hima_dht_cli.cli` — the `serve` subcommand (`--host`, `--port`).
 
 ## Exception / Error Types
 
