@@ -68,9 +68,8 @@ The default path is typically: C:\Program Files (x86)\StarCraft II\Maps<br>
 ```sh
 git clone git@github.com:samhsu-dev/hima.git
 cd hima
-# install the uv workspace (all members) and apply site-packages patches
+# install the uv workspace (all members)
 uv sync
-uv run hima setup
 ```
 
 ---

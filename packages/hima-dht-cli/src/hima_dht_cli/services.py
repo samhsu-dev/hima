@@ -8,7 +8,6 @@ from pathlib import Path
 import psutil
 import requests
 
-from hima_dht_cli import patches
 from hima_dht_cli.errors import CommandError
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 from hima_dht_cli.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
@@ -131,7 +130,6 @@ def _collect_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
         (f"leader model {model}", leader_model_present(OLLAMA_URL, model), "ollama tags"),
         ("SC2 installation", SC2_APP.exists(), str(SC2_APP)),
     ]
-    checks.extend((label, ok, "site-packages") for label, ok in patches.patch_states())
     return checks
 
 

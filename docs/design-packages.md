@@ -81,9 +81,9 @@ the contracts between them. Per-member internals: `design-cli.md`,
 
 ### hima-dht-cli
 - **Responsibility**: The `hima` operations CLI: managed services, experiment
-  runs, metrics, site-package patches, replay tools, page export.
+  runs, metrics, replay tools, page export.
 - **Modules**: `cli.py` (entry, `[project.scripts] hima`), `services.py`,
-  `experiment.py`, `metrics.py`, `patches.py`, `replay.py`, `export.py`,
+  `experiment.py`, `metrics.py`, `pysc2_play.py`, `replay.py`, `export.py`,
   `viewer.py`, `workspace.py`, `errors.py`.
 - **Run layout**: `workspace.py` anchors `tmp/`, `runs/`, and the service
   state directory to the invoking process's working directory (`RUN_ROOT`);

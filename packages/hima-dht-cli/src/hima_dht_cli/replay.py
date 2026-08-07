@@ -10,7 +10,9 @@ def play(replay_path: Path) -> None:
     if not replay_path.exists():
         raise CommandError(f"replay not found: {replay_path}")
     argv = [
-        sys.executable, "-m", "pysc2.bin.play",
+        # pysc2.bin.play behind the in-process compatibility shims
+        # (pysc2_play); site-packages carries no patches.
+        sys.executable, "-m", "hima_dht_cli.pysc2_play",
         "--replay", str(replay_path.resolve()),
         # The macOS retail client crashes on the RGB render interface; feature
         # layers only.

@@ -10,7 +10,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 - **Classes**: `ServiceSpec`, `ServiceOptions`, `ReplayExporter`, `CommandError`
 - **Modules**: `cli` (typer application: one typed command function per
-  subcommand), `workspace` (run layout), `services`, `patches`,
+  subcommand), `workspace` (run layout), `services`, `pysc2_play`,
   `experiment`, `metrics`, `replay`, `export`, `viewer`. The observation webui
   is the separate member `hima-dht-web` (`design-observation.md`).
 - **Relationships**: `cli` dispatches to every command module (one-way).
@@ -78,15 +78,15 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 Each command module exposes one public entry consumed by `cli`.
 
-- **setup() -> None** (`patches`) — Responsibility: make a fresh checkout runnable.
-  Behavior: run `uv sync`, re-apply the three site-packages source patches
-  (idempotent, marker-guarded), verify `sc2`/`pysc2`/`s2protocol` import.
-  Errors: `CommandError` on sync failure or failed import.
-- **apply_patches() -> list[str]** (`patches`) — Behavior: patch
-  `pysc2/lib/colors.py` (Python 3.12 `random.shuffle` removal),
-  `pysc2/bin/play.py` (replay version newer than pysc2's table),
-  `s2protocol/versions/__init__.py` (`imp` module removal). Output: per-patch status.
-  Errors: `CommandError` when a target file is missing.
+- **main() -> None** (`pysc2_play`) — Responsibility: run `pysc2.bin.play`
+  with the compatibility shims applied in-process. Behavior: replace
+  `colors.shuffled_hue` (Python 3.11 removed `random.shuffle`'s `random`
+  argument; the shim replicates the wheel's fixed shuffle) and wrap
+  `run_configs.get` (a replay version newer than pysc2's table falls back
+  to the installed 'latest' build), then invoke the play entry. Runs as a
+  subprocess of `replay`; site-packages carries no patches, so `uv sync`
+  never needs a follow-up step. s2protocol's Python 3.12 breakage is left
+  alone: no code path imports it.
 - **up(options, skip_pull) -> None** (`services`) — Behavior: ensure the managed
   services in dependency order — `ollama serve`, the leader model (pulled when
   absent unless `skip_pull`), the advisor FastAPI server (`uvicorn --factory` on
@@ -99,7 +99,7 @@ Each command module exposes one public entry consumed by `cli`.
   line matches `process_keyword`; never touches other processes. Output: per-service
   status lines.
 - **status(options) -> None** (`services`) — Behavior: report advisor health, webui
-  health, Ollama health, leader model presence, SC2 installation path, and patch state.
+  health, Ollama health, leader model presence, and SC2 installation path.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
   Behavior: precheck services, invoke `python -m hima_dht_game` with `--num_server 1` (keeps the
   advisor port independent of `--seed`), stream its output, then archive

@@ -52,13 +52,8 @@
 ## Developer instructions
 
 - After editing `[tool.uv.sources]`: `uv lock`, commit `uv.lock`.
-- The cli image applies the three site-packages patches after the final sync by
-  running `hima_dht_cli.patches.apply_patches` with `/app/.venv/bin/python`
-  directly — `uv run hima setup` would auto-sync the full default closure
-  (dev + advisor groups, torch) back into the pruned image.
-- PySC2 4.0.0 wheel ships the colors.py shuffle line with a trailing
-  `# Return a fixed shuffle` comment; the patch target includes it — a fresh
-  install (image build) fails setup with a comment-less target.
+- No image patches site-packages: the pysc2 compatibility fixes apply
+  in-process when `hima replay` spawns `hima_dht_cli.pysc2_play`.
 - Compose: default profile = advisor + ollama + webui; `--profile baked` swaps the
   leader; `--profile game` adds the containerized game (linux/amd64 only).
 - `FROM` of a local tag ignores the requested build platform, so the game image

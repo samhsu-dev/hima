@@ -14,7 +14,7 @@ import uvicorn
 from dotenv import load_dotenv
 from uvicorn.config import STARTUP_FAILURE
 
-from hima_dht_cli import experiment, patches, services, viewer
+from hima_dht_cli import experiment, services, viewer
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.metrics import report
 from hima_dht_cli.replay import play
@@ -79,12 +79,6 @@ def main() -> int:
 
 
 @app.command()
-def setup() -> None:
-    """Run uv sync, apply the site-packages patches, verify imports."""
-    patches.setup()
-
-
-@app.command()
 def up(
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
@@ -107,7 +101,7 @@ def status(
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
 ) -> None:
-    """Report service, game, and patch state."""
+    """Report service and game state."""
     services.status(_service_options(port, webui_port, model))
 
 

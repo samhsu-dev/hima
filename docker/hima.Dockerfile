@@ -30,12 +30,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --package "${PACKAGE}" --no-default-groups \
       ${EXTRA:+--extra "${EXTRA}"}
 
-# Only the cli closure ships pysc2/s2protocol; land their site-packages
-# patches with the venv interpreter directly — `hima setup` would re-sync
-# the full default closure into a pruned image.
-RUN if [ "${PACKAGE}" = "hima-dht-cli" ]; then \
-      /app/.venv/bin/python -c "from hima_dht_cli.patches import apply_patches; print('\n'.join(apply_patches()))" \
-      && /app/.venv/bin/python -c "import sc2, pysc2, s2protocol, mpyq"; \
-    fi
-
 ENV PATH="/app/.venv/bin:$PATH"

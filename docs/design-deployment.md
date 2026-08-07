@@ -28,10 +28,8 @@ services, and their interfaces. No classes; components only.
   installs that member plus its dependency closure, nothing else.
 - **Layers**: uv base image → dependency-only sync from the lock and member
   metadata → copy `packages/` source → `uv sync --locked --package $PACKAGE`
-  (no default groups). The cli image additionally applies the site-packages
-  patches by calling `hima_dht_cli.patches.apply_patches` with the image
-  venv's interpreter (pysc2 and s2protocol live only in the cli closure; a
-  full `hima setup` would re-sync the pruned closure).
+  (no default groups). No image mutates site-packages: the pysc2
+  compatibility fixes apply in-process (`hima_dht_cli.pysc2_play`).
 - **Interfaces**: no default command; each compose service sets its own.
 - **Constraint**: Linux torch resolves from the CPU wheel index
   (`[tool.uv.sources]`, marker `sys_platform == 'linux'`); macOS keeps the default

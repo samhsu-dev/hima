@@ -26,7 +26,7 @@ import sys
 import pytest
 from typer.testing import CliRunner
 
-from hima_dht_cli import cli, experiment, patches, services
+from hima_dht_cli import cli, experiment, services
 from hima_dht_cli.errors import CommandError
 
 runner = CliRunner()
@@ -94,13 +94,13 @@ def test_invalid_port_environment_exits_usage_error(monkeypatch: pytest.MonkeyPa
 
 def test_command_error_prints_message_and_exits_one(
         monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(sys, "argv", ["hima", "setup"])
+    monkeypatch.setattr(sys, "argv", ["hima", "down"])
     monkeypatch.setattr(cli, "load_dotenv", lambda path: False)
 
-    def broken_setup() -> None:
+    def broken_down() -> None:
         raise CommandError("boom")
 
-    monkeypatch.setattr(patches, "setup", broken_setup)
+    monkeypatch.setattr(services, "down", broken_down)
 
     assert cli.main() == 1
     assert "hima: boom" in capsys.readouterr().err
