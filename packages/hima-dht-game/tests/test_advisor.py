@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht_advisor.server (create_app over fake advisors).
+"""Unit tests for hima_dht_game.advisor (create_app over fake advisors).
 
 Test cases:
 - test_health_lists_model_ids: /health reports ok and sorted advisor ids.
@@ -10,7 +10,7 @@ Test cases:
 """
 from fastapi.testclient import TestClient
 
-from hima_dht_advisor.server import Query, create_app
+from hima_dht_game.advisor import Query, create_app
 
 
 class FakeAdvisor:

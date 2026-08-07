@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-advisor = ["hima-dht-advisor"]
+advisor = ["hima-dht-game[advisor]"]
 
 [project.scripts]
 hima = "hima_dht_cli.cli:main"
@@ -29,7 +29,6 @@ hima = "hima_dht_cli.cli:main"
 hima-dht-records = { workspace = true }
 hima-dht-game = { workspace = true }
 hima-dht-web = { workspace = true }
-hima-dht-advisor = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

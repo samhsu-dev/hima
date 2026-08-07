@@ -46,7 +46,7 @@ def advisor_spec(port: int) -> ServiceSpec:
         name="advisor",
         argv=[
             sys.executable, "-m", "uvicorn",
-            "--factory", "hima_dht_advisor.server:create_default_app",
+            "--factory", "hima_dht_game.advisor:create_default_app",
             "--host", "127.0.0.1", "--port", str(port),
         ],
         health_url=_advisor_health_url("127.0.0.1", port),

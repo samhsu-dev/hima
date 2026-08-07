@@ -11,6 +11,16 @@ dependencies = [
     "hima-dht-records",
 ]
 
+[project.optional-dependencies]
+advisor = [
+    "fastapi==0.141.1",
+    "uvicorn==0.52.1",
+    "pydantic==2.13.4",
+    "transformers==5.14.1",
+    "torch==2.13.0",
+    "accelerate==1.14.0",
+]
+
 [tool.uv.sources]
 hima-dht-records = { workspace = true }
 

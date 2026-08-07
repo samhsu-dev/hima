@@ -12,7 +12,6 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "hima-dht-advisor",
     "hima-dht-cli",
     "hima-dht-game",
     "hima-dht-records",
@@ -21,6 +20,7 @@ members = [
 overrides = [{ name = "s2clientprotocol", marker = "sys_platform == 'never'" }]
 
 [manifest.dependency-groups]
+advisor = [{ name = "hima-dht-game", extras = ["advisor"], editable = "packages/hima-dht-game" }]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
@@ -634,31 +634,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hima-dht-advisor"
-version = "0.1.0"
-source = { editable = "packages/hima-dht-advisor" }
-dependencies = [
-    { name = "accelerate" },
-    { name = "fastapi" },
-    { name = "pydantic" },
-    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
-    { name = "transformers" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "accelerate", specifier = "==1.14.0" },
-    { name = "fastapi", specifier = "==0.141.1" },
-    { name = "pydantic", specifier = "==2.13.4" },
-    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.13.0" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers", specifier = "==5.14.1" },
-    { name = "uvicorn", specifier = "==0.52.1" },
-]
-
-[[package]]
 name = "hima-dht-cli"
 version = "0.1.0"
 source = { editable = "packages/hima-dht-cli" }
@@ -680,14 +655,14 @@ dependencies = [
 
 [package.optional-dependencies]
 advisor = [
-    { name = "hima-dht-advisor" },
+    { name = "hima-dht-game", extra = ["advisor"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "burnysc2", specifier = "==7.3.0" },
-    { name = "hima-dht-advisor", marker = "extra == 'advisor'", editable = "packages/hima-dht-advisor" },
     { name = "hima-dht-game", editable = "packages/hima-dht-game" },
+    { name = "hima-dht-game", extras = ["advisor"], marker = "extra == 'advisor'", editable = "packages/hima-dht-game" },
     { name = "hima-dht-records", editable = "packages/hima-dht-records" },
     { name = "hima-dht-web", editable = "packages/hima-dht-web" },
     { name = "mpyq", specifier = "==0.2.5" },
@@ -714,14 +689,33 @@ dependencies = [
     { name = "requests" },
 ]
 
+[package.optional-dependencies]
+advisor = [
+    { name = "accelerate" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "transformers" },
+    { name = "uvicorn" },
+]
+
 [package.metadata]
 requires-dist = [
+    { name = "accelerate", marker = "extra == 'advisor'", specifier = "==1.14.0" },
     { name = "burnysc2", specifier = "==7.3.0" },
+    { name = "fastapi", marker = "extra == 'advisor'", specifier = "==0.141.1" },
     { name = "hima-dht-records", editable = "packages/hima-dht-records" },
     { name = "numpy", specifier = "==2.5.1" },
     { name = "openai", specifier = "==2.53.0" },
+    { name = "pydantic", marker = "extra == 'advisor'", specifier = "==2.13.4" },
     { name = "requests", specifier = "==2.34.2" },
+    { name = "torch", marker = "sys_platform == 'linux' and extra == 'advisor'", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform != 'linux' and extra == 'advisor'", specifier = "==2.13.0" },
+    { name = "transformers", marker = "extra == 'advisor'", specifier = "==5.14.1" },
+    { name = "uvicorn", marker = "extra == 'advisor'", specifier = "==0.52.1" },
 ]
+provides-extras = ["advisor"]
 
 [[package]]
 name = "hima-dht-records"

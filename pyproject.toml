@@ -2,6 +2,9 @@
 members = ["packages/*"]
 
 [tool.uv]
+# Plain `uv sync` on the dev machine installs the native-advisor stack too;
+# image builds prune it with `--package`/`--no-default-groups`.
+default-groups = ["dev", "advisor"]
 override-dependencies = [
     # pysc2 declares the abandoned official s2clientprotocol, whose stale
     # protoc codegen clobbers the regenerated pys2clientprotocol package that
@@ -10,6 +13,7 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
+hima-dht-game = { workspace = true }
 # Linux images run the advisor on CPU; macOS keeps the PyPI MPS wheel.
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
@@ -21,6 +25,9 @@ explicit = true
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+]
+advisor = [
+    "hima-dht-game[advisor]",
 ]
 
 [tool.pytest.ini_options]

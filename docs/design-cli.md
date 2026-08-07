@@ -90,7 +90,7 @@ Each command module exposes one public entry consumed by `cli`.
 - **up(options, skip_pull) -> None** (`services`) — Behavior: ensure the managed
   services in dependency order — `ollama serve`, the leader model (pulled when
   absent unless `skip_pull`), the advisor FastAPI server (`uvicorn --factory` on
-  `hima_dht_advisor.server`), the
+  `hima_dht_game.advisor`), the
   observation webui (`uvicorn --factory` on `hima_dht_web.server`) — skipping any service
   already healthy; poll health endpoints a bounded number of attempts.
   Errors: `CommandError` when health is not reached within the attempt bound.
