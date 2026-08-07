@@ -91,7 +91,8 @@ the contracts between them. Per-member internals: `design-cli.md`,
 - **Extras**: `advisor` — installs `hima-dht-advisor` for host-native
   `hima up` advisor launch; absent in the game image.
 - **Third-party closure**: burnysc2, pysc2, pys2clientprotocol, s2protocol,
-  mpyq, psutil, pygame, python-dotenv, requests, typer.
+  mpyq, psutil, pygame, python-dotenv, requests, typer, uvicorn (the in-process
+  `hima serve` runner).
 
 ## Contracts
 

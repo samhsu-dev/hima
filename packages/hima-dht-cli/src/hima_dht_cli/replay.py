@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from hima_dht.errors import CommandError
+from hima_dht_cli.errors import CommandError
 
 
 def play(replay_path: Path) -> None:

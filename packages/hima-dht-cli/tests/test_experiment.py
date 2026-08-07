@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.experiment (game invocation).
+"""Unit tests for hima_dht_cli.experiment (game invocation).
 
 Test cases:
 - test_invoke_game_forwards_advisor_host: the advisor host in RunOptions
@@ -16,9 +16,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from hima_dht import experiment
-from hima_dht.experiment import RunOptions
-from hima_dht.services import DEFAULT_ADVISOR_HOST
+from hima_dht_cli import experiment
+from hima_dht_cli.experiment import RunOptions
+from hima_dht_cli.services import DEFAULT_ADVISOR_HOST
 
 
 def make_options(advisor_host: str) -> RunOptions:

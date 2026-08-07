@@ -12,10 +12,10 @@ import uvicorn
 from dotenv import load_dotenv
 from uvicorn.config import STARTUP_FAILURE
 
-from hima_dht import experiment, metrics, patches, replay, services, viewer
-from hima_dht.errors import CommandError
-from hima_dht.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
-from hima_dht.workspace import RUN_ROOT
+from hima_dht_cli import experiment, metrics, patches, replay, services, viewer
+from hima_dht_cli.errors import CommandError
+from hima_dht_cli.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
+from hima_dht_cli.workspace import RUN_ROOT
 from hima_dht_records import DEFAULT_SAMPLE_INTERVAL
 from hima_dht_web import server
 

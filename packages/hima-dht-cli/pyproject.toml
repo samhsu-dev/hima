@@ -1,0 +1,36 @@
+[project]
+name = "hima-dht-cli"
+version = "0.1.0"
+description = "hima operations CLI: managed services, experiment runs, metrics, patches, replay tools"
+requires-python = ">=3.12"
+dependencies = [
+    "burnysc2==7.3.0",
+    "pysc2==4.0.0",
+    "pys2clientprotocol==1.0.2",
+    "s2protocol==5.0.16.97563.0",
+    "mpyq==0.2.5",
+    "psutil==7.2.2",
+    "pygame==2.6.1",
+    "python-dotenv==1.2.2",
+    "requests==2.34.2",
+    "uvicorn==0.52.1",
+    "hima-dht-records",
+    "hima-dht-game",
+    "hima-dht-web",
+]
+
+[project.optional-dependencies]
+advisor = ["hima-dht-advisor"]
+
+[project.scripts]
+hima = "hima_dht_cli.cli:main"
+
+[tool.uv.sources]
+hima-dht-records = { workspace = true }
+hima-dht-game = { workspace = true }
+hima-dht-web = { workspace = true }
+hima-dht-advisor = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.patches (site-packages source patches).
+"""Unit tests for hima_dht_cli.patches (site-packages source patches).
 
 Test cases:
 - test_patch_colors_pristine_wheel_line_patched: the exact colors.py line the
@@ -8,7 +8,7 @@ Test cases:
 """
 from pathlib import Path
 
-from hima_dht import patches
+from hima_dht_cli import patches
 
 PRISTINE_COLORS = (
     "def shuffled_hue(scale):\n"

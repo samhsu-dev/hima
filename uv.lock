@@ -12,13 +12,16 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "hima-dht",
     "hima-dht-advisor",
+    "hima-dht-cli",
     "hima-dht-game",
     "hima-dht-records",
     "hima-dht-web",
 ]
 overrides = [{ name = "s2clientprotocol", marker = "sys_platform == 'never'" }]
+
+[manifest.dependency-groups]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
 name = "absl-py"
@@ -631,69 +634,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hima-dht"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "accelerate" },
-    { name = "burnysc2" },
-    { name = "fastapi" },
-    { name = "hima-dht-advisor" },
-    { name = "hima-dht-game" },
-    { name = "hima-dht-records" },
-    { name = "hima-dht-web" },
-    { name = "mpyq" },
-    { name = "numpy" },
-    { name = "openai" },
-    { name = "psutil" },
-    { name = "pydantic" },
-    { name = "pygame" },
-    { name = "pys2clientprotocol" },
-    { name = "pysc2" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-    { name = "s2protocol" },
-    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
-    { name = "transformers" },
-    { name = "uvicorn" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "accelerate", specifier = "==1.14.0" },
-    { name = "burnysc2", specifier = "==7.3.0" },
-    { name = "fastapi", specifier = "==0.141.1" },
-    { name = "hima-dht-advisor", editable = "packages/hima-dht-advisor" },
-    { name = "hima-dht-game", editable = "packages/hima-dht-game" },
-    { name = "hima-dht-records", editable = "packages/hima-dht-records" },
-    { name = "hima-dht-web", editable = "packages/hima-dht-web" },
-    { name = "mpyq", specifier = "==0.2.5" },
-    { name = "numpy", specifier = "==2.5.1" },
-    { name = "openai", specifier = "==2.53.0" },
-    { name = "psutil", specifier = "==7.2.2" },
-    { name = "pydantic", specifier = "==2.13.4" },
-    { name = "pygame", specifier = "==2.6.1" },
-    { name = "pys2clientprotocol", specifier = "==1.0.2" },
-    { name = "pysc2", specifier = "==4.0.0" },
-    { name = "python-dotenv", specifier = "==1.2.2" },
-    { name = "requests", specifier = "==2.34.2" },
-    { name = "s2protocol", specifier = "==5.0.16.97563.0" },
-    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.13.0" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers", specifier = "==5.14.1" },
-    { name = "uvicorn", specifier = "==0.52.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.1.1" }]
-
-[[package]]
 name = "hima-dht-advisor"
 version = "0.1.0"
 source = { editable = "packages/hima-dht-advisor" }
@@ -717,6 +657,50 @@ requires-dist = [
     { name = "transformers", specifier = "==5.14.1" },
     { name = "uvicorn", specifier = "==0.52.1" },
 ]
+
+[[package]]
+name = "hima-dht-cli"
+version = "0.1.0"
+source = { editable = "packages/hima-dht-cli" }
+dependencies = [
+    { name = "burnysc2" },
+    { name = "hima-dht-game" },
+    { name = "hima-dht-records" },
+    { name = "hima-dht-web" },
+    { name = "mpyq" },
+    { name = "psutil" },
+    { name = "pygame" },
+    { name = "pys2clientprotocol" },
+    { name = "pysc2" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+    { name = "s2protocol" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+advisor = [
+    { name = "hima-dht-advisor" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "burnysc2", specifier = "==7.3.0" },
+    { name = "hima-dht-advisor", marker = "extra == 'advisor'", editable = "packages/hima-dht-advisor" },
+    { name = "hima-dht-game", editable = "packages/hima-dht-game" },
+    { name = "hima-dht-records", editable = "packages/hima-dht-records" },
+    { name = "hima-dht-web", editable = "packages/hima-dht-web" },
+    { name = "mpyq", specifier = "==0.2.5" },
+    { name = "psutil", specifier = "==7.2.2" },
+    { name = "pygame", specifier = "==2.6.1" },
+    { name = "pys2clientprotocol", specifier = "==1.0.2" },
+    { name = "pysc2", specifier = "==4.0.0" },
+    { name = "python-dotenv", specifier = "==1.2.2" },
+    { name = "requests", specifier = "==2.34.2" },
+    { name = "s2protocol", specifier = "==5.0.16.97563.0" },
+    { name = "uvicorn", specifier = "==0.52.1" },
+]
+provides-extras = ["advisor"]
 
 [[package]]
 name = "hima-dht-game"

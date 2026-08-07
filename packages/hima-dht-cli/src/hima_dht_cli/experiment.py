@@ -6,9 +6,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from hima_dht import services
-from hima_dht.errors import CommandError
-from hima_dht.workspace import GAME_OUTPUTS, RUN_ROOT, RUNS_DIR, TMP_DIR
+from hima_dht_cli import services
+from hima_dht_cli.errors import CommandError
+from hima_dht_cli.workspace import GAME_OUTPUTS, RUN_ROOT, RUNS_DIR, TMP_DIR
 
 
 @dataclass(frozen=True)

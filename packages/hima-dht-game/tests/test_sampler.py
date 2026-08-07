@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.sampler (GameSampler).
+"""Unit tests for hima_dht_game.sampler (GameSampler).
 
 Test cases:
 - test_sampler_roundtrip_matches_folded_payload: records written by GameSampler

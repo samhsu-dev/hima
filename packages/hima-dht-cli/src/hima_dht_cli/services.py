@@ -8,10 +8,10 @@ from pathlib import Path
 import psutil
 import requests
 
-from hima_dht import patches
-from hima_dht.errors import CommandError
+from hima_dht_cli import patches
+from hima_dht_cli.errors import CommandError
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
-from hima_dht.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
+from hima_dht_cli.workspace import RUN_ROOT, SC2_APP, SERVICE_DIR
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ADVISOR_HOST = "localhost"

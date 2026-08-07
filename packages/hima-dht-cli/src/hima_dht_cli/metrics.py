@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from hima_dht.workspace import RUNS_DIR, TMP_DIR
+from hima_dht_cli.workspace import RUNS_DIR, TMP_DIR
 
 COLUMNS = ("result", "time", "agent_call", "apu", "rur", "pbr")
 

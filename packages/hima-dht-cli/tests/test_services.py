@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.services (managed background services).
+"""Unit tests for hima_dht_cli.services (managed background services).
 
 Test cases:
 - test_ensure_leader_model_queries_local_ollama_root: the leader-model
@@ -11,7 +11,7 @@ Test cases:
 """
 import pytest
 
-from hima_dht import services
+from hima_dht_cli import services
 
 
 def test_ensure_leader_model_queries_local_ollama_root(monkeypatch: pytest.MonkeyPatch) -> None:

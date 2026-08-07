@@ -3,8 +3,8 @@ import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 
-from hima_dht.errors import CommandError
-from hima_dht.export import export_frames
+from hima_dht_cli.errors import CommandError
+from hima_dht_cli.export import export_frames
 from hima_dht_records import RECORD_FILE
 from hima_dht_web.logs import COMMAND_LOG, DECISION_LOG, parse_commands, parse_decisions
 from hima_dht_web.server import render

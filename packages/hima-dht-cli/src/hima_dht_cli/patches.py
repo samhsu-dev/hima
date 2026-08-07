@@ -8,7 +8,7 @@ import sys
 import sysconfig
 from pathlib import Path
 
-from hima_dht.errors import CommandError
+from hima_dht_cli.errors import CommandError
 
 _COLORS_TARGET = "random.shuffle(palette, lambda: 0.5)  # Return a fixed shuffle"
 _COLORS_MARKER = "replicate the"
