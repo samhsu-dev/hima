@@ -137,6 +137,16 @@
   passthrough: a containerized Ollama runs CPU-only. The leader runs on native
   Ollama (`brew install ollama`); the compose `ollama` service targets Linux
   hosts (NVIDIA block commented in `docker-compose.yml`).
+- Measured on the M4 Pro host: the containerized CPU Ollama never finishes a
+  qwen3:8b leader completion inside the openai client's 600 s timeout; native
+  Ollama (Metal) answers the same call in 29.5 s.
+- Native leader on a host that also runs the compose stack: the container
+  publishes 11434, so start the native server on another port —
+  `OLLAMA_HOST=127.0.0.1:11435 OLLAMA_CONTEXT_LENGTH=16384 ollama serve` —
+  and pass `--base-url http://host.docker.internal:11435/v1` to `hima run`
+  (OrbStack forwards `host.docker.internal` to the host loopback).
+- Ollama's default context is 4096 tokens; `OLLAMA_CONTEXT_LENGTH` raises it
+  server-wide for leader prompts.
 - Leader portability lives in the endpoint contract, not the engine: `hima run`
   prechecks `GET {HIMA_LEADER_BASE_URL}/models` with `HIMA_LEADER_API_KEY` as
   bearer token, so any OpenAI-compatible server (Ollama, vLLM, hosted
