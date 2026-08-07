@@ -9,6 +9,10 @@ Test cases:
   "never recorded" from a corrupt record.
 - test_read_manifest_corrupt_raises: a file that does not parse as a
   manifest raises CommandError naming the path.
+- test_read_manifest_version_mismatch_raises: a manifest recording a
+  different version raises CommandError naming both versions.
+- test_write_manifest_leaves_no_scratch_file: the atomic write leaves no
+  .tmp sibling next to the manifest.
 """
 
 from pathlib import Path
@@ -71,7 +75,32 @@ def test_read_manifest_missing_returns_none(tmp_path: Path) -> None:
 
 def test_read_manifest_corrupt_raises(tmp_path: Path) -> None:
     path = tmp_path / "manifest.toml"
-    path.write_text('backend = "hybrid"\n', encoding="utf-8")
+    path.write_text('version = 1\nbackend = "hybrid"\n', encoding="utf-8")
 
     with pytest.raises(CommandError, match="corrupt service manifest"):
         read_manifest(path)
+
+
+def test_read_manifest_version_mismatch_raises(tmp_path: Path) -> None:
+    path = tmp_path / "manifest.toml"
+    path.write_text('version = 99\nbackend = "native"\n', encoding="utf-8")
+
+    with pytest.raises(CommandError, match="records version 99.*reads.*version 1"):
+        read_manifest(path)
+
+
+def test_write_manifest_leaves_no_scratch_file(tmp_path: Path) -> None:
+    manifest = ServiceManifest(
+        backend=ServiceBackend.DOCKER,
+        created="2026-08-07T12:00:00+09:00",
+        leader_model="qwen3:8b",
+        leader_endpoint="http://localhost:11434/v1",
+        services={
+            "advisor": DockerService(endpoint="http://localhost:8090", container="hima-advisor-1")
+        },
+    )
+    path = tmp_path / "manifest.toml"
+
+    write_manifest(manifest, path)
+
+    assert list(tmp_path.iterdir()) == [path]
