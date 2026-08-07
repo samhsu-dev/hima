@@ -50,9 +50,18 @@ vendor documentation.
   one JSON array — parse both (verified against compose 5.1.2);
   `up -d --wait` blocks on healthchecks (services without one wait for
   running) and needs no extra timeout — healthcheck retries bound it.
-- **[docker compose]** `docker compose port ollama 11434` — prints the host
-  binding (`0.0.0.0:12345`); the authoritative published port after
-  interpolation (`up --backend docker` divergence check).
+- **[docker compose]** `docker compose run --rm <service>` — propagates the
+  container's exit code verbatim (verified: exit 7 → 7); argv after the
+  service name overrides the compose-file `command` for that invocation
+  only; `depends_on` services are started and waited on. Targeting a
+  profiled service auto-activates its profile — hima still passes
+  `--profile game` explicitly.
+- **[docker]** `docker image inspect <name>` — exit 0 when the image exists
+  locally, 1 when absent (verified); the game-image presence probe.
+- **[click]** `ctx.get_parameter_source("param")` on a `typer.Context`
+  parameter — returns `ParameterSource.COMMANDLINE`, `.ENVIRONMENT`, or
+  `.DEFAULT` (verified, click 8.4 via typer 0.27); distinguishes an explicit
+  flag from env/default values for headless flag forwarding.
 - **[ollama]** `OLLAMA_HOST=127.0.0.1:<port>` — environment consumed by both
   `ollama serve` (bind address) and the `ollama pull` client (target server).
 
@@ -70,7 +79,8 @@ vendor documentation.
   precedence: CLI flag > exported environment > `.env` > code default.
 - Environment keys the entry point reads: `HIMA_ADVISOR_HOST`, `HIMA_ADVISOR_PORT`,
   `HIMA_WEBUI_HOST`, `HIMA_WEBUI_PORT`, `HIMA_LEADER_MODEL`, `HIMA_LEADER_BASE_URL`,
-  `HIMA_SERVICE_BACKEND`, `HIMA_OLLAMA_PORT`.
+  `HIMA_LEADER_API_KEY`, `HIMA_SERVICE_BACKEND`, `HIMA_OLLAMA_PORT`, and
+  `SC2_LICENSE` (`run --headless` only; no default, never persisted).
 - `docker compose` subprocesses run with `cwd=RUN_ROOT`; the docker backend
   requires `docker-compose.yml` in the run root.
 - Core modules never read `os.environ`; env-backed values enter through typer

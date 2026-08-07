@@ -112,8 +112,9 @@
 - After editing `[tool.uv.sources]`: `uv lock`, commit `uv.lock`.
 - No image patches site-packages: the pysc2 compatibility fixes apply
   in-process when `hima replay` spawns `hima_dht_cli.pysc2_play`.
-- Compose: default profile = advisor + ollama + webui; `--profile baked` swaps the
-  leader; `--profile game` adds the containerized game.
+- Compose: default set = advisor + webui; `--profile leader` adds the
+  containerized ollama engine (Linux/NVIDIA hosts); `--profile baked` the
+  weights-baked leader; `--profile game` the containerized game.
 - The game image builds `FROM` the native-platform cli tag:
   `docker build -t hima-cli --build-arg PACKAGE=hima-dht-cli
   -f docker/hima.Dockerfile .`; no platform override anywhere.
@@ -141,15 +142,13 @@
 - Measured on the M4 Pro host: the containerized CPU Ollama never finishes a
   qwen3:8b leader completion inside the openai client's 600 s timeout; native
   Ollama (Metal) answers the same call in 29.5 s.
-- The compose `ollama` service publishes `${HIMA_OLLAMA_PORT:-11434}` so the
-  host reaches the containerized leader (`hima up --backend docker`). After
-  `up -d --wait`, `hima` verifies the actual binding with `docker compose
-  port ollama 11434` and aborts on divergence naming `HIMA_OLLAMA_PORT` — a
-  `--ollama-port` flag cannot reach compose interpolation. The
-  same port cannot host both backends: the manifest records which backend
-  owns it, native `up` fails explicitly when the endpoint answers without an
-  owned pid, and compose fails the publish with a bind error when a native
-  server holds the port. The game container reaches the native server as
+- The compose `ollama` service (profile `leader`) publishes
+  `${HIMA_OLLAMA_PORT:-11434}` so the host reaches the containerized engine
+  when the operator opts in; `hima` never manages it — the operator points
+  `HIMA_LEADER_BASE_URL` at the published port. A native `ollama serve` and
+  the profile publish cannot share one port: compose fails the publish with
+  a bind error, and native `up` fails explicitly when an endpoint answers
+  without an owned pid. The game container reaches the native server as
   `http://host.docker.internal:11434/v1` (OrbStack and Docker Desktop
   forward that name to the host loopback).
 - The game service passes configuration only through its compose

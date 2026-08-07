@@ -10,8 +10,8 @@ services, and their interfaces. No classes; components only.
   (`hima-dht-cli` without the `advisor` extra); `game` (cli image +
   StarCraft II headless); leader baked image (ollama + qwen3:8b weights).
   Member mapping: `design-packages.md`.
-- **Services** (`docker-compose.yml`): `advisor`, `ollama`, `leader-baked` (profile
-  `baked`), `webui`, `game` (profile `game`)
+- **Services** (`docker-compose.yml`): `advisor`, `webui`, `ollama` (profile
+  `leader`), `leader-baked` (profile `baked`), `game` (profile `game`)
 - **Relationships**: `game` uses `advisor` by service name (one-way); the
   leader is an OpenAI-compatible URL (`HIMA_LEADER_BASE_URL`), defaulting to
   the host's native Ollama through the container-to-host name. `webui` reads
@@ -68,42 +68,65 @@ services, and their interfaces. No classes; components only.
 | Service | Image | Command | Ports | Data |
 |---------|-------|---------|-------|------|
 | `advisor` | advisor | `uvicorn --factory hima_dht_game.app:create_default_app --host 0.0.0.0 --port 8090` | 8090 | `hf-cache` volume at `HF_HOME` |
-| `ollama` | ollama pinned | default | `${HIMA_OLLAMA_PORT:-11434}` | `ollama` volume |
-| `leader-baked` | leader baked | default | 11434 | weights in image |
+| `ollama` (profile `leader`) | ollama pinned | default | `${HIMA_OLLAMA_PORT:-11434}` | `ollama` volume |
+| `leader-baked` (profile `baked`) | leader baked | default | 11434 | weights in image |
 | `webui` | webui | `uvicorn --factory hima_dht_web.server:create_default_app --host 0.0.0.0 --port 8123` | 8123 | `./runs`, `./tmp` bind mounts (read-only) |
-| `game` | game | `hima run`, configured via `HIMA_*` environment | none | `./runs`, `./tmp` bind mounts (read-write) |
+| `game` (profile `game`) | game | `hima run`, configured via `HIMA_*` environment | none | `./runs`, `./tmp` bind mounts (read-write) |
 
 - The webui factory and `hima run` anchor the run layout to the working
   directory (`design-packages.md`); each service's `WORKDIR` is the directory
   holding the `runs/` and `tmp/` bind mounts.
 
-- Service lifecycle boundary: `hima up`/`down`/`status` manage the long-lived
-  prerequisite services only (`ollama`/`leader-baked`, `advisor`, `webui`). The
-  `game` service is a one-shot job in the run lifecycle: launched per game via
-  the `game` profile, exits with the run, never managed by `up`/`down`.
+- Service lifecycle boundary: `hima up`/`down`/`status` manage the hima-owned
+  long-lived services only — `advisor` and `webui` on the docker backend;
+  the same two plus a conditionally provisioned native `ollama serve` on the
+  native backend. The leader is consumed through its endpoint, never managed
+  as a compose service. The `game` service is a one-shot job in the run
+  lifecycle: launched per game by `hima run --headless` via the `game`
+  profile, exits with the run, never managed by `up`/`down`.
+- Leader responsibility split: hima owns verification of the leader endpoint
+  (`GET {HIMA_LEADER_BASE_URL}/models` with the bearer key, at `up` and at
+  `run`), never the engine behind it. One exception on the native backend:
+  `hima up` provisions a local `ollama serve` when the resolved leader URL
+  equals the local default derived from the ollama port
+  (`http://localhost:{HIMA_OLLAMA_PORT}/v1`). The comparison is textual —
+  any other URL, including `http://127.0.0.1:11434/v1` naming an externally
+  managed local server, switches `up` to verify-only.
 - `hima up --backend native|docker` (`HIMA_SERVICE_BACKEND`, default native)
-  selects where the trio runs: native host processes, or these compose
-  services via `docker compose up -d --wait`. Every successful `up` records
-  its ownership in `tmp/services/manifest.toml`; `down`/`status` operate on
-  the recorded backend (`design-cli.md`). Both backends serve the same host
-  ports, so they are exclusive per port: `up` fails explicitly when an
-  endpoint is answered by a process it does not own — never a silent skip.
-- `ollama` publishes `${HIMA_OLLAMA_PORT:-11434}` so the host reaches the
-  containerized leader (the docker service backend); move the port to run it
-  beside a native server. `ollama` and `leader-baked` are alternatives for
-  the same role — the `baked` profile (explicit opt-in, fixed 11434 publish)
-  builds the weights into the image; a compose-network game selects either
-  by pointing `HIMA_LEADER_BASE_URL` at the service name.
+  selects where the managed services run: native host processes, or these
+  compose services via `docker compose up -d --wait`. Every successful `up`
+  records its ownership in `tmp/services/manifest.toml`; `down`/`status`
+  operate on the recorded backend (`design-cli.md`). Both backends serve the
+  same host ports, so they are exclusive per port: `up` fails explicitly when
+  an endpoint is answered by a process it does not own — never a silent skip.
+- `ollama` (profile `leader`) is an opt-in containerized engine for Linux
+  hosts with NVIDIA GPUs: activate the profile and point
+  `HIMA_LEADER_BASE_URL` at its published `${HIMA_OLLAMA_PORT:-11434}`. On
+  macOS the engine stays native for the Metal GPU (`impl-deployment.md`).
+  `ollama` and `leader-baked` are alternatives for the same role — the
+  `baked` profile (explicit opt-in, fixed 11434 publish) builds the weights
+  into the image; a compose-network game selects either by pointing
+  `HIMA_LEADER_BASE_URL` at the service name.
 - `advisor` serves `GET /health`, ready only after model loading completes; the
   host-side health precheck polls it.
-- `game` carries no command flags: its compose `environment` block sets the
-  container-context values (`HIMA_ADVISOR_HOST=advisor`; leader URL default
-  `http://host.docker.internal:11434/v1`) and forwards `.env` overrides via
-  `${HIMA_*}` interpolation, keeping the CLI precedence chain (flag >
-  environment > .env > default) intact. The host-native game keeps the
-  localhost defaults. The advisor host is an argument: `hima_dht_game
-  --advisor_host` (default `localhost`), consumed by the bot when building
-  the inference URL, forwarded by `hima run --advisor-host`.
+- `game` carries no command flags in the compose file: its `environment`
+  block sets the container-context values (`HIMA_ADVISOR_HOST=advisor`;
+  leader URL default `http://host.docker.internal:11434/v1`) and forwards
+  `.env` overrides via `${HIMA_*}` interpolation, keeping the CLI precedence
+  chain (flag > environment > .env > default) intact. The host-native game
+  keeps the localhost defaults. The advisor host is an argument:
+  `hima_dht_game --advisor_host` (default `localhost`), consumed by the bot
+  when building the inference URL, forwarded by `hima run --advisor-host`.
+- `hima run --headless` wraps the one-shot `game` job. It requires a manifest
+  recording the docker backend, ensures the game image (built via the compose
+  `game` profile when absent; the build requires `SC2_LICENSE`), then runs
+  the service with `--rm`. Game-semantic flags given on the host command line
+  (difficulty, enemy race, seed, model, realtime) are forwarded as flags to
+  the in-container `hima run` — a per-invocation command override, so the
+  chain inside the container still resolves flag > environment > .env >
+  default. Host-topology flags (`--port`, `--advisor-host`, `--base-url`,
+  `--api-key`) are rejected with `--headless`: inside the compose network
+  those values are the `environment` block's concern.
 
 ## Exception / Error Handling
 
@@ -112,3 +135,10 @@ services, and their interfaces. No classes; components only.
   containerized services.
 - The `game` image build without the license argument fails at the unpack layer with
   the argument name in the error.
+- An unreachable leader endpoint fails `up` naming both remediations: start
+  an engine serving the URL (`ollama serve`) or point `HIMA_LEADER_BASE_URL`
+  at a reachable provider.
+- `hima run --headless` without a docker-backend manifest fails naming the
+  remediation (`hima down && hima up --backend docker`); a missing game image
+  without `SC2_LICENSE` fails naming the variable and the license acceptance
+  it carries.
