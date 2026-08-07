@@ -1,4 +1,4 @@
-"""Unit tests for hima_dht.main argument defaults.
+"""Unit tests for hima_dht.cli argument defaults.
 
 Defaults resolve as CLI flag > exported environment > .env > code
 default; `.env` loading happens in `main()`, so `_build_parser` sees
@@ -18,7 +18,7 @@ Test cases:
 """
 import pytest
 
-from hima_dht import main
+from hima_dht import cli
 from hima_dht.errors import CommandError
 
 
@@ -27,7 +27,7 @@ def test_up_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_WEBUI_PORT", "9123")
     monkeypatch.setenv("HIMA_LEADER_MODEL", "qwen3:32b")
 
-    args = main._build_parser().parse_args(["up"])
+    args = cli._build_parser().parse_args(["up"])
 
     assert (args.port, args.webui_port, args.model) == (9001, 9123, "qwen3:32b")
 
@@ -35,7 +35,7 @@ def test_up_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_flag_overrides_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_ADVISOR_PORT", "9001")
 
-    args = main._build_parser().parse_args(["up", "--port", "7000"])
+    args = cli._build_parser().parse_args(["up", "--port", "7000"])
 
     assert args.port == 7000
 
@@ -44,7 +44,7 @@ def test_run_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_ADVISOR_HOST", "advisor")
     monkeypatch.setenv("HIMA_LEADER_BASE_URL", "http://ollama:11434/v1")
 
-    args = main._build_parser().parse_args(["run"])
+    args = cli._build_parser().parse_args(["run"])
 
     assert (args.advisor_host, args.base_url) == ("advisor", "http://ollama:11434/v1")
 
@@ -52,7 +52,7 @@ def test_run_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_serve_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_WEBUI_HOST", "0.0.0.0")
 
-    args = main._build_parser().parse_args(["serve"])
+    args = cli._build_parser().parse_args(["serve"])
 
     assert args.host == "0.0.0.0"
 
@@ -61,4 +61,4 @@ def test_invalid_port_environment_raises_command_error(monkeypatch: pytest.Monke
     monkeypatch.setenv("HIMA_ADVISOR_PORT", "eight")
 
     with pytest.raises(CommandError, match="HIMA_ADVISOR_PORT"):
-        main._build_parser()
+        cli._build_parser()
