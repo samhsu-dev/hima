@@ -7,3 +7,5 @@ runs/
 *.viewer.html
 docs/todo.md
 docker/maps/
+**/.claude/
+**/.mypy_cache/
