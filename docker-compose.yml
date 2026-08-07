@@ -11,6 +11,11 @@
 #   docker compose --profile baked build leader-baked
 #   docker compose --profile baked up -d advisor leader-baked
 
+# Pin the compose project name so every container, network, and volume
+# groups under "hima" regardless of the checkout directory name or -p flag
+# omission (containers hima-<service>-1, network hima_default).
+name: hima
+
 services:
   advisor:
     build: &hima-image
