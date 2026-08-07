@@ -67,6 +67,38 @@
   with a copy).
 - Confirmed design: the game image is arm64-native and execs only `SC2_x64`
   through qemu-user (`design-deployment.md`, emulation boundary).
+- 4.10 client segfaults joining retail Ancient Cistern LE (2023): its
+  `t3Terrain.xml` declares `<terrain version="115">`; the 4.10 terrain parser
+  null-derefs in a sort comparator on that version. Maps that load (AcropolisLE
+  2019, EquilibriumAIE) declare `version="114"` with an otherwise identical
+  element structure.
+- Fix part 1 (join): rewrite that one attribute to `114`; the otherwise
+  untouched retail map then reaches `in_game` (verified by raw
+  s2clientprotocol create/join probe under qemu).
+- Fix part 2 (balance): the terrain-only fix fails at bot iteration 0 with
+  `KeyError: 300` — `constants.RESEARCHS` uses live-balance upgrade IDs
+  (300 = `UpgradeId.INTERFERENCEMATRIX`) absent from the 4.10 catalog.
+  Injecting the `aiarena/sc2patch` `5.0.14.94137` payload into the map MPQ
+  (156 files: `Base.SC2Data/GameData/*.xml` + `stableid.json` + localized
+  strings + Assets; the three case-colliding display files excluded) yields a
+  306-entry upgrade catalog whose numeric IDs match the python-sc2 enums.
+- `stableid.json` loads from the map's `Base.SC2Data\GameData\` like any
+  GameData override; the 4.10 Linux install root has no `stableid.json` and
+  needs none.
+- Ruled out by ablation: aiarena/sc2patch GameData injection, removing
+  map-embedded GameData XMLs, stripping unknown doodads, emptying t3Water,
+  remapping unknown terrain textures — all still crash with `version="115"`.
+- AI Arena "AIE" maps are retail maps with the `aiarena/sc2patch` payload
+  injected (balance GameData + stableid + strings) for 4.10 behavior parity;
+  no Ancient Cistern AIE exists in any published pool.
+- `.SC2Map` is a plain MPQ (magic `MPQ\x1A`); stored names are case-insensitive
+  and use backslashes. Read with `mpyq` (in the image venv); write with
+  StormLib (`brew install stormlib`) via ctypes — Debian `smpq` aborts on an
+  internal assertion and cannot write.
+- SC2 crash logs print a backtrace from its own SIGSEGV handler, which then
+  double-faults; the core dump captures only that secondary crash. Capture the
+  real fault with `qemu-x86_64 -g <port>` plus `gdb-multiarch` attached before
+  continuing.
 - `ldd` on `SC2_x64` (amd64 game image): libdl, libpthread, librt, libstdc++,
   libm, libgcc_s, libc + ld-linux — all covered by `libc6:amd64` +
   `libstdc++6:amd64` (libgcc-s1 arrives as a dependency).
@@ -94,6 +126,13 @@
   `python -c "urllib.request.urlopen(...)"` from the image venv on PATH.
 - The ladder map lives in the git-tracked `maps/`; the game image COPYs it from
   there. No `docker/maps/` staging directory.
+- The tracked map is the retail file (`terrain version="115"`), which the 4.10
+  client cannot join; runs mount the terrain+balance patched map
+  (`tmp/sc2map-aie/`) over `/root/StarCraftII/maps/Ancient Cistern
+  LE.SC2Map` until the packaging decision (patch tracked file vs build-time
+  rewrite vs separate artifact) lands. End-to-end verified: `hima run` in the
+  game container reaches `in_game`, `get_information` passes, advisor calls
+  flow.
 - macOS container VMs (Docker Desktop, OrbStack) expose no Apple-GPU
   passthrough: a containerized Ollama runs CPU-only. The leader runs on native
   Ollama (`brew install ollama`); the compose `ollama` service targets Linux
