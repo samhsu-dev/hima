@@ -40,8 +40,9 @@ services, and their interfaces. No classes; components only.
 
 ### game (`docker/game.Dockerfile`)
 - **Responsibility**: The cli image plus the StarCraft II Linux headless client
-  (4.10), the ladder map Ancient Cistern LE from `maps/`, and the emulation
-  boundary that runs only the SC2 binary under amd64 emulation.
+  (4.10), the 4.10-compatible ladder map artifact (`AncientCisternAIE` from
+  `maps/`, installed under the retail name), and the emulation boundary that
+  runs only the SC2 binary under amd64 emulation.
 - **Base**: the cli member image on the build host's native platform, consumed
   via the `HIMA_IMAGE` build argument. Python and the game runtime execute
   natively; no whole-container emulation.

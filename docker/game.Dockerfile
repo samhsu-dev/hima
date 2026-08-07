@@ -31,6 +31,10 @@ RUN cd /root/StarCraftII/Versions/Base75689 \
 
 # Lowercase maps/: the SC2 Linux server resolves the relative map path
 # against <root>/maps, not the zip's Maps/ (impl-deployment.md).
-COPY ["maps/Ancient Cistern LE.SC2Map", "/root/StarCraftII/maps/"]
+# AncientCisternAIE = the retail map with the terrain version rewritten to
+# 114 and the aiarena/sc2patch 5.0.14 balance payload injected — the 4.10
+# client cannot load the retail file (impl-deployment.md). Installed under
+# the retail name so map resolution ("Ancient Cistern LE") is unchanged.
+COPY ["maps/AncientCisternAIE.SC2Map", "/root/StarCraftII/maps/Ancient Cistern LE.SC2Map"]
 
 ENV SC2PATH=/root/StarCraftII

@@ -124,15 +124,16 @@
   value. The published-port defaults live in `.env.example`.
 - python:3.12-slim has no curl; the advisor healthcheck runs
   `python -c "urllib.request.urlopen(...)"` from the image venv on PATH.
-- The ladder map lives in the git-tracked `maps/`; the game image COPYs it from
+- Ladder maps live in the git-tracked `maps/`; the game image COPYs from
   there. No `docker/maps/` staging directory.
-- The tracked map is the retail file (`terrain version="115"`), which the 4.10
-  client cannot join; runs mount the terrain+balance patched map
-  (`tmp/sc2map-aie/`) over `/root/StarCraftII/maps/Ancient Cistern
-  LE.SC2Map` until the packaging decision (patch tracked file vs build-time
-  rewrite vs separate artifact) lands. End-to-end verified: `hima run` in the
-  game container reaches `in_game`, `get_information` passes, advisor calls
-  flow.
+- `maps/Ancient Cistern LE.SC2Map` stays the untouched retail file (terrain
+  `version="115"`, which 4.10 cannot load). `maps/AncientCisternAIE.SC2Map`
+  is that file with the terrain attribute rewritten to `114` and the
+  sc2patch `5.0.14.94137` payload injected — the AI Arena "AIE" naming
+  convention. The game image installs the AIE artifact under the retail
+  name, so map resolution ("Ancient Cistern LE") is unchanged. End-to-end
+  verified: `hima run` in the game container reaches `in_game`,
+  `get_information` passes, advisor and leader calls flow.
 - macOS container VMs (Docker Desktop, OrbStack) expose no Apple-GPU
   passthrough: a containerized Ollama runs CPU-only. The leader runs on native
   Ollama (`brew install ollama`); the compose `ollama` service targets Linux
