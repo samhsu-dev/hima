@@ -38,7 +38,7 @@ def test_up_ensures_services_in_dependency_order(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(services, "_ensure_service", fake_ensure_service)
     monkeypatch.setattr(services, "_ensure_leader_model", fake_ensure_leader_model)
-    services.up(services.DEFAULT_ADVISOR_PORT, "qwen3:8b", skip_pull=True)
+    services.up(services.ServiceOptions(), skip_pull=True)
 
     assert order == ["ollama", "leader-model", "advisor", "webui"]
 

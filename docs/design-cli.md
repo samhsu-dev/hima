@@ -7,7 +7,7 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 
 ## Design Overview
 
-- **Classes**: `ServiceSpec`, `ReplayExporter`, `CommandError`
+- **Classes**: `ServiceSpec`, `ServiceOptions`, `ReplayExporter`, `CommandError`
 - **Modules**: `main` (dispatch), `workspace` (paths), `services`, `patches`,
   `experiment`, `metrics`, `replay`, `export`, `viewer`; subpackage `web/`
   (game observation — `concept-observation.md`, `design-observation.md`)
@@ -21,8 +21,13 @@ infrastructure, no domain semantics, no non-trivial algorithm.
 - **Abstract**: `sc2.observer_ai.ObserverAI` (implemented by `ReplayExporter`)
 - **Exceptions**: `CommandError` extends `Exception`, raised by every command module,
   handled only in `main`
-- **Dependency roles**: Data holders: `ServiceSpec`. Orchestrator: `main.main`.
-  Helpers: all command modules (stateless functions).
+- **Dependency roles**: Data holders: `ServiceSpec`, `ServiceOptions`.
+  Orchestrator: `main.main`. Helpers: all command modules (stateless functions).
+- **Defaults**: `main` loads `.env` at the repo root on entry; argument
+  defaults resolve as CLI flag > exported environment > `.env` > code default.
+  The `HIMA_*` keys are shared with docker compose interpolation
+  (`.env.example`). Core modules never read the environment; they receive
+  resolved values.
 - **Assets**: `player_template.html` — self-contained canvas player; `viewer` injects
   exported JSON into its placeholder to produce one standalone HTML file per replay.
   The observation server injects the same payload into the same template
@@ -36,6 +41,13 @@ infrastructure, no domain semantics, no non-trivial algorithm.
   `pid_file: Path`, `log_file: Path`, `process_keyword: str`.
 - **Methods**: none (data holder). `process_keyword` guards `down`: a stored PID is
   killed only when its command line contains this keyword.
+
+### ServiceOptions (`services`)
+- **Responsibility**: Endpoint and model selection for the managed services,
+  resolved by `main` and passed as one parameter object.
+- **Fields**: `advisor_port: int`, `webui_port: int`, `model: str` — each
+  defaulting to the owning module's constant.
+- **Methods**: none (data holder).
 
 ### ReplayExporter (`export`)
 - **Responsibility**: Step through a replay via the SC2 engine and record sampled
@@ -65,7 +77,7 @@ Each command module exposes one public entry consumed by `main`.
   `pysc2/bin/play.py` (replay version newer than pysc2's table),
   `s2protocol/versions/__init__.py` (`imp` module removal). Output: per-patch status.
   Errors: `CommandError` when a target file is missing.
-- **up(port, model, skip_pull) -> None** (`services`) — Behavior: ensure the managed
+- **up(options, skip_pull) -> None** (`services`) — Behavior: ensure the managed
   services in dependency order — `ollama serve`, the leader model (pulled when
   absent unless `skip_pull`), the advisor FastAPI server (`uvicorn app:app`), the
   observation webui (`uvicorn --factory` on `web.server`) — skipping any service
@@ -75,7 +87,7 @@ Each command module exposes one public entry consumed by `main`.
   reverse launch order (webui, advisor, ollama) after verifying the process command
   line matches `process_keyword`; never touches other processes. Output: per-service
   status lines.
-- **status(port, model) -> None** (`services`) — Behavior: report advisor health, webui
+- **status(options) -> None** (`services`) — Behavior: report advisor health, webui
   health, Ollama health, leader model presence, SC2 installation path, and patch state.
 - **run(options) -> None** (`experiment`) — Responsibility: one full experiment game.
   Behavior: precheck services, invoke `main.py` with `--num_server 1` (keeps the

@@ -32,6 +32,15 @@ class ServiceSpec:
     process_keyword: str
 
 
+@dataclass(frozen=True)
+class ServiceOptions:
+    """Endpoint and model selection for the managed services."""
+
+    advisor_port: int = DEFAULT_ADVISOR_PORT
+    webui_port: int = DEFAULT_WEBUI_PORT
+    model: str = DEFAULT_LEADER_MODEL
+
+
 def advisor_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="advisor",
@@ -88,11 +97,11 @@ def _advisor_health_url(host: str, port: int) -> str:
     return f"http://{host}:{port}/health"
 
 
-def up(port: int, model: str, skip_pull: bool) -> None:
+def up(options: ServiceOptions, skip_pull: bool) -> None:
     _ensure_service(ollama_spec())
-    _ensure_leader_model(model, skip_pull)
-    _ensure_service(advisor_spec(port))
-    _ensure_service(webui_spec(DEFAULT_WEBUI_PORT))
+    _ensure_leader_model(options.model, skip_pull)
+    _ensure_service(advisor_spec(options.advisor_port))
+    _ensure_service(webui_spec(options.webui_port))
     print("all services healthy")
 
 
@@ -101,15 +110,16 @@ def down() -> None:
         print(_stop_one(spec))
 
 
-def status(port: int, model: str) -> None:
-    for label, ok, detail in _collect_checks(port, model):
+def status(options: ServiceOptions) -> None:
+    for label, ok, detail in _collect_checks(options):
         mark = "✓" if ok else "✗"
         print(f" {mark} {label:<40} {detail}")
 
 
-def _collect_checks(port: int, model: str) -> list[tuple[str, bool, str]]:
-    advisor = advisor_spec(port)
-    webui = webui_spec(DEFAULT_WEBUI_PORT)
+def _collect_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
+    advisor = advisor_spec(options.advisor_port)
+    webui = webui_spec(options.webui_port)
+    model = options.model
     checks = [
         ("advisor server", _healthy(advisor.health_url), advisor.health_url),
         ("webui server", _healthy(webui.health_url), webui.health_url),

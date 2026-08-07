@@ -20,6 +20,7 @@ dependencies = [
     "requests==2.34.2",
     "pygame==2.6.1",
     "psutil==7.2.2",
+    "python-dotenv==1.2.2",
 ]
 
 [project.scripts]

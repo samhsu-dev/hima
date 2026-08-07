@@ -1,13 +1,21 @@
-"""hima console entry: argument parsing and delegation only."""
+"""hima console entry: argument parsing and delegation only.
+
+Defaults resolve as: CLI flag > exported environment > `.env` at the repo
+root (shared with docker compose interpolation) > code default.
+"""
 import argparse
+import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from cli import experiment, metrics, patches, replay, services, viewer
 from cli.errors import CommandError
 from cli.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
 from cli.web import server
 from cli.web.records import DEFAULT_SAMPLE_INTERVAL
+from cli.workspace import REPO_ROOT
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
 DIFFICULTIES = (
@@ -16,15 +24,38 @@ DIFFICULTIES = (
 )
 RACES = ("Protoss", "Zerg", "Terran")
 
+# Environment keys shared with docker-compose.yml interpolation (.env.example).
+ENV_ADVISOR_HOST = "HIMA_ADVISOR_HOST"
+ENV_ADVISOR_PORT = "HIMA_ADVISOR_PORT"
+ENV_WEBUI_HOST = "HIMA_WEBUI_HOST"
+ENV_WEBUI_PORT = "HIMA_WEBUI_PORT"
+ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
+ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
+
 
 def main() -> int:
-    args = _build_parser().parse_args()
+    load_dotenv(REPO_ROOT / ".env")
     try:
+        args = _build_parser().parse_args()
         args.func(args)
     except CommandError as error:
         print(f"hima: {error}", file=sys.stderr)
         return 1
     return 0
+
+
+def _env_str(name: str, fallback: str) -> str:
+    return os.environ.get(name, fallback)
+
+
+def _env_int(name: str, fallback: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return fallback
+    try:
+        return int(raw)
+    except ValueError as error:
+        raise CommandError(f"{name} must be an integer, got {raw!r}") from error
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -46,18 +77,29 @@ def _add_setup(sub: "argparse._SubParsersAction") -> None:
 
 def _add_services(sub: "argparse._SubParsersAction") -> None:
     up = sub.add_parser("up", help="launch advisor, Ollama, and the webui, wait until healthy")
-    up.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)
-    up.add_argument("--model", default=DEFAULT_LEADER_MODEL)
+    _add_service_options(up)
     up.add_argument("--skip-pull", action="store_true")
-    up.set_defaults(func=lambda args: services.up(args.port, args.model, args.skip_pull))
+    up.set_defaults(func=lambda args: services.up(_service_options(args), args.skip_pull))
 
     down = sub.add_parser("down", help="stop services started by hima")
     down.set_defaults(func=lambda args: services.down())
 
     status = sub.add_parser("status", help="report service, game, and patch state")
-    status.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)
-    status.add_argument("--model", default=DEFAULT_LEADER_MODEL)
-    status.set_defaults(func=lambda args: services.status(args.port, args.model))
+    _add_service_options(status)
+    status.set_defaults(func=lambda args: services.status(_service_options(args)))
+
+
+def _add_service_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--port", type=int,
+                        default=_env_int(ENV_ADVISOR_PORT, DEFAULT_ADVISOR_PORT))
+    parser.add_argument("--webui-port", type=int,
+                        default=_env_int(ENV_WEBUI_PORT, server.DEFAULT_PORT))
+    parser.add_argument("--model", default=_env_str(ENV_LEADER_MODEL, DEFAULT_LEADER_MODEL))
+
+
+def _service_options(args: argparse.Namespace) -> services.ServiceOptions:
+    return services.ServiceOptions(
+        advisor_port=args.port, webui_port=args.webui_port, model=args.model)
 
 
 def _add_run(sub: "argparse._SubParsersAction") -> None:
@@ -65,10 +107,10 @@ def _add_run(sub: "argparse._SubParsersAction") -> None:
     run.add_argument("--difficulty", default="Hard", choices=DIFFICULTIES)
     run.add_argument("--enemy-race", default="Zerg", choices=RACES)
     run.add_argument("--seed", type=int, default=3)
-    run.add_argument("--port", type=int, default=DEFAULT_ADVISOR_PORT)
-    run.add_argument("--advisor-host", default=DEFAULT_ADVISOR_HOST)
-    run.add_argument("--model", default=DEFAULT_LEADER_MODEL)
-    run.add_argument("--base-url", default=DEFAULT_LEADER_BASE_URL)
+    run.add_argument("--port", type=int, default=_env_int(ENV_ADVISOR_PORT, DEFAULT_ADVISOR_PORT))
+    run.add_argument("--advisor-host", default=_env_str(ENV_ADVISOR_HOST, DEFAULT_ADVISOR_HOST))
+    run.add_argument("--model", default=_env_str(ENV_LEADER_MODEL, DEFAULT_LEADER_MODEL))
+    run.add_argument("--base-url", default=_env_str(ENV_LEADER_BASE_URL, DEFAULT_LEADER_BASE_URL))
     run.add_argument("--realtime", action="store_true")
     run.set_defaults(func=_cmd_run)
 
@@ -111,8 +153,8 @@ def _add_viewer(sub: "argparse._SubParsersAction") -> None:
 
 def _add_serve(sub: "argparse._SubParsersAction") -> None:
     observe = sub.add_parser("serve", help="serve the game observation web UI")
-    observe.add_argument("--host", default=server.DEFAULT_HOST)
-    observe.add_argument("--port", type=int, default=server.DEFAULT_PORT)
+    observe.add_argument("--host", default=_env_str(ENV_WEBUI_HOST, server.DEFAULT_HOST))
+    observe.add_argument("--port", type=int, default=_env_int(ENV_WEBUI_PORT, server.DEFAULT_PORT))
     observe.set_defaults(func=lambda args: server.serve(args.host, args.port))
 
 
