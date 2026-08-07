@@ -8,8 +8,8 @@ import sys
 import sysconfig
 from pathlib import Path
 
-from cli.errors import CommandError
-from cli.workspace import REPO_ROOT
+from hima_dht.errors import CommandError
+from hima_dht.workspace import REPO_ROOT
 
 _COLORS_TARGET = "random.shuffle(palette, lambda: 0.5)  # Return a fixed shuffle"
 _COLORS_MARKER = "replicate the"

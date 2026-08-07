@@ -1,4 +1,4 @@
-"""Unit tests for cli.web.records (GameSampler, fold_records).
+"""Unit tests for hima_dht.web.records (GameSampler, fold_records).
 
 Test cases:
 - test_fold_records_synthetic_file_builds_payload: complete record file folds
@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.web.records import GameSampler, fold_lines, fold_records
+from hima_dht.web.records import GameSampler, fold_lines, fold_records
 
 
 @dataclass

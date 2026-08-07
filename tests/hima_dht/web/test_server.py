@@ -1,4 +1,4 @@
-"""Unit tests for cli.web.server (HTTP surface).
+"""Unit tests for hima_dht.web.server (HTTP surface).
 
 Test cases:
 - test_index_page_links_archived_game: the index page lists an archived run
@@ -29,9 +29,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from cli.errors import CommandError
-from cli.web.games import GameStore
-from cli.web.server import create_app, create_default_app, serve
+from hima_dht.errors import CommandError
+from hima_dht.web.games import GameStore
+from hima_dht.web.server import create_app, create_default_app, serve
 
 META_LINE = '{"k":"meta","map":"TestMap","playable":[2,2,100,120],"neutral":[]}'
 FRAME_LINE = '{"k":"frame","t":9.5,"m":50,"g":0,"su":12,"sc":15,"u":[]}'

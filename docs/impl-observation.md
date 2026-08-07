@@ -12,7 +12,7 @@
   `serve()`; a bound port exits via `sys.exit(3)` (`uvicorn.config.STARTUP_FAILURE`),
   never raises `OSError` to the caller — catch `SystemExit` and check `code`.
 - **[burnysc2]** sampler reads the same AI fields `ReplayExporter.on_step` already
-  samples (`src/cli/export.py`); `BotAI` and `ObserverAI` expose that shared surface.
+  samples (`src/hima_dht/export.py`); `BotAI` and `ObserverAI` expose that shared surface.
 - **[asyncio]** live tail = poll loop: read new lines from a saved byte offset, then
   `await asyncio.sleep(interval)`; no external tailing library.
 
@@ -26,7 +26,7 @@
 
 - Record file writes: hold one file handle, `write` + `flush` per record line.
 - Template injection: reuse the placeholder replacement `viewer.py` performs on
-  `src/cli/player_template.html`; the server injects per request.
+  `src/hima_dht/player_template.html`; the server injects per request.
 - SSE probe pattern for tests: uvicorn server on a thread, `urllib` client
   (scratchpad `sse_probe.py` shape).
 

@@ -8,10 +8,10 @@ from pathlib import Path
 import psutil
 import requests
 
-from cli import patches
-from cli.errors import CommandError
-from cli.web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
-from cli.workspace import REPO_ROOT, SC2_APP, SERVICE_DIR
+from hima_dht import patches
+from hima_dht.errors import CommandError
+from hima_dht.web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
+from hima_dht.workspace import REPO_ROOT, SC2_APP, SERVICE_DIR
 
 OLLAMA_URL = "http://localhost:11434"
 DEFAULT_ADVISOR_HOST = "localhost"
@@ -55,7 +55,7 @@ def advisor_spec(port: int) -> ServiceSpec:
 def webui_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
         name="webui",
-        argv=[sys.executable, "-m", "uvicorn", "--factory", "cli.web.server:create_default_app",
+        argv=[sys.executable, "-m", "uvicorn", "--factory", "hima_dht.web.server:create_default_app",
               "--host", "127.0.0.1", "--port", str(port)],
         health_url=f"http://127.0.0.1:{port}/api/games",
         pid_file=SERVICE_DIR / "webui.pid",

@@ -1,4 +1,4 @@
-"""Unit tests for cli.web.games (GameStore).
+"""Unit tests for hima_dht.web.games (GameStore).
 
 Test cases:
 - test_list_games_returns_archived_runs_newest_first: archived entries carry
@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.web.games import GameStore
+from hima_dht.web.games import GameStore
 
 META_LINE = '{"k":"meta","map":"TestMap","playable":[2,2,100,120],"neutral":[]}'
 FRAME_LINE = '{"k":"frame","t":9.5,"m":50,"g":0,"su":12,"sc":15,"u":[]}'

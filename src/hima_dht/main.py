@@ -10,12 +10,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from cli import experiment, metrics, patches, replay, services, viewer
-from cli.errors import CommandError
-from cli.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
-from cli.web import server
-from cli.web.records import DEFAULT_SAMPLE_INTERVAL
-from cli.workspace import REPO_ROOT
+from hima_dht import experiment, metrics, patches, replay, services, viewer
+from hima_dht.errors import CommandError
+from hima_dht.services import DEFAULT_ADVISOR_HOST, DEFAULT_ADVISOR_PORT, DEFAULT_LEADER_MODEL
+from hima_dht.web import server
+from hima_dht.web.records import DEFAULT_SAMPLE_INTERVAL
+from hima_dht.workspace import REPO_ROOT
 
 DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
 DIFFICULTIES = (

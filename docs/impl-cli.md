@@ -8,7 +8,7 @@ vendor documentation.
 - **[python-dotenv]** `from dotenv import load_dotenv; load_dotenv(REPO_ROOT / ".env")` —
   `override=False` (default) keeps exported environment variables ahead of `.env`
   values; a missing file returns `False` silently (no error path needed).
-- **[uvicorn]** `python -m uvicorn --factory cli.web.server:create_default_app --host H --port P` —
+- **[uvicorn]** `python -m uvicorn --factory hima_dht.web.server:create_default_app --host H --port P` —
   `--factory` treats the import string as a zero-argument callable returning the app;
   verified to boot and serve `/api/games` from the workspace layout.
 - **[psutil]** `psutil.Process(pid).cmdline()` — raises `psutil.NoSuchProcess` for a

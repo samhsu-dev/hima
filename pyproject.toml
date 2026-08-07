@@ -1,5 +1,5 @@
 [project]
-name = "hima"
+name = "hima-dht"
 version = "0.1.0"
 description = "HIMA (Society of Mind Meets Real-Time Strategy) local reproduction toolkit"
 requires-python = ">=3.12"
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hima = "cli.main:main"
+hima = "hima_dht.main:main"
 
 [tool.uv]
 override-dependencies = [
@@ -53,7 +53,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli"]
+packages = ["src/hima_dht"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -624,7 +624,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hima"
+name = "hima-dht"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -13,8 +13,8 @@ from sc2.observer_ai import ObserverAI
 from sc2.sc2process import SC2Process
 from sc2.unit import Unit
 
-from cli.errors import CommandError
-from cli.web.records import GameSampler, fold_records
+from hima_dht.errors import CommandError
+from hima_dht.web.records import GameSampler, fold_records
 
 OBSERVED_PLAYER_ID = 1
 

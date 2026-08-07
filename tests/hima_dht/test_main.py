@@ -1,4 +1,4 @@
-"""Unit tests for cli.main argument defaults.
+"""Unit tests for hima_dht.main argument defaults.
 
 Defaults resolve as CLI flag > exported environment > .env > code
 default; `.env` loading happens in `main()`, so `_build_parser` sees
@@ -18,8 +18,8 @@ Test cases:
 """
 import pytest
 
-from cli import main
-from cli.errors import CommandError
+from hima_dht import main
+from hima_dht.errors import CommandError
 
 
 def test_up_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:

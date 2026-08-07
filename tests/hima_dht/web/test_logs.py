@@ -1,4 +1,4 @@
-"""Unit tests for cli.web.logs (parse_decisions, parse_commands).
+"""Unit tests for hima_dht.web.logs (parse_decisions, parse_commands).
 
 Test cases:
 - test_parse_decisions_reads_timestamp_and_summary: summary lines pair with the
@@ -14,7 +14,7 @@ Test cases:
 """
 from pathlib import Path
 
-from cli.web.logs import MAX_SHOWN_ACTIONS, parse_commands, parse_decisions
+from hima_dht.web.logs import MAX_SHOWN_ACTIONS, parse_commands, parse_decisions
 
 
 def write_log(path: Path, text: str) -> Path:

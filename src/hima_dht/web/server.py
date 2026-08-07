@@ -9,11 +9,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from uvicorn.config import STARTUP_FAILURE
 
-from cli.errors import CommandError
-from cli.viewer import render
-from cli.web.games import GameStore
-from cli.web.stream import StreamCursor, live_events
-from cli.workspace import RUNS_DIR, TMP_DIR
+from hima_dht.errors import CommandError
+from hima_dht.viewer import render
+from hima_dht.web.games import GameStore
+from hima_dht.web.stream import StreamCursor, live_events
+from hima_dht.workspace import RUNS_DIR, TMP_DIR
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8123

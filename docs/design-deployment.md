@@ -13,7 +13,7 @@ services, and their interfaces. No classes; components only.
   `webui` reads the host's `runs/` and `tmp/` bind mounts. `advisor` and `webui`
   build from the `hima` image; `game` builds from the `hima` image.
 - **Build inputs**: `pyproject.toml` + `uv.lock` (locked environment), `app.py`,
-  `src/cli/`, StarCraft II Linux package (user-provided license acceptance).
+  `src/hima_dht/`, StarCraft II Linux package (user-provided license acceptance).
 
 ## Image Specifications
 

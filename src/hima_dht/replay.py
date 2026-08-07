@@ -3,8 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cli.errors import CommandError
-from cli.workspace import REPO_ROOT
+from hima_dht.errors import CommandError
+from hima_dht.workspace import REPO_ROOT
 
 
 def play(replay_path: Path) -> None:
