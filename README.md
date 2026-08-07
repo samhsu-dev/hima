@@ -29,20 +29,6 @@ uv run hima run       # play one game, archive its outputs under runs/
 uv run hima metrics   # aggregate metric.json across runs/
 ```
 
-Containerized services (advisor, Ollama, webui):
-
-```sh
-docker compose up -d
-```
-
-Containerized game — headless SC2 4.10, the reference placement; its runs
-compare only with other containerized runs. Build steps in
-[docker/game.Dockerfile](docker/game.Dockerfile):
-
-```sh
-docker compose --profile game up game
-```
-
 ## API
 
 One uv workspace, four members ([design](docs/design-packages.md)):
