@@ -1,9 +1,9 @@
 """Unit tests for hima_dht_cli.services._manifest (service start manifest).
 
 Test cases:
-- test_native_manifest_round_trips: a native manifest written to TOML
+- test_host_manifest_round_trips: a host manifest written to TOML
   reads back equal, entry types included.
-- test_docker_manifest_round_trips: a docker manifest written to TOML
+- test_container_manifest_round_trips: a container manifest written to TOML
   reads back equal, entry types included.
 - test_read_manifest_missing_returns_none: no manifest file distinguishes
   "never recorded" from a corrupt record.
@@ -20,24 +20,24 @@ from pathlib import Path
 import pytest
 
 from hima_dht_cli.errors import CommandError
+from hima_dht_cli.placement import Placement
 from hima_dht_cli.services import (
-    DockerService,
+    ContainerService,
+    HostService,
     ModelEndpoint,
-    NativeService,
-    ServiceBackend,
     ServiceManifest,
     read_manifest,
 )
 from hima_dht_cli.services._manifest import write_manifest
 
 
-def test_native_manifest_round_trips(tmp_path: Path) -> None:
+def test_host_manifest_round_trips(tmp_path: Path) -> None:
     manifest = ServiceManifest(
-        backend=ServiceBackend.NATIVE,
+        placement=Placement.HOST,
         created="2026-08-07T12:00:00+09:00",
         endpoints={"leader": ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")},
         services={
-            "advisor": NativeService(
+            "advisor": HostService(
                 endpoint="http://localhost:8090",
                 pid=4321,
                 pid_file="tmp/services/advisor.pid",
@@ -52,13 +52,15 @@ def test_native_manifest_round_trips(tmp_path: Path) -> None:
     assert read_manifest(path) == manifest
 
 
-def test_docker_manifest_round_trips(tmp_path: Path) -> None:
+def test_container_manifest_round_trips(tmp_path: Path) -> None:
     manifest = ServiceManifest(
-        backend=ServiceBackend.DOCKER,
+        placement=Placement.CONTAINER,
         created="2026-08-07T12:00:00+09:00",
         endpoints={"leader": ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")},
         services={
-            "advisor": DockerService(endpoint="http://localhost:8090", container="hima-advisor-1")
+            "advisor": ContainerService(
+                endpoint="http://localhost:8090", container="hima-advisor-1"
+            )
         },
     )
     path = tmp_path / "manifest.toml"
@@ -74,7 +76,7 @@ def test_read_manifest_missing_returns_none(tmp_path: Path) -> None:
 
 def test_read_manifest_corrupt_raises(tmp_path: Path) -> None:
     path = tmp_path / "manifest.toml"
-    path.write_text('version = 2\nbackend = "hybrid"\n', encoding="utf-8")
+    path.write_text('version = 3\nplacement = "hybrid"\n', encoding="utf-8")
 
     with pytest.raises(CommandError, match="corrupt service manifest"):
         read_manifest(path)
@@ -82,19 +84,21 @@ def test_read_manifest_corrupt_raises(tmp_path: Path) -> None:
 
 def test_read_manifest_version_mismatch_raises(tmp_path: Path) -> None:
     path = tmp_path / "manifest.toml"
-    path.write_text('version = 99\nbackend = "native"\n', encoding="utf-8")
+    path.write_text('version = 99\nplacement = "host"\n', encoding="utf-8")
 
-    with pytest.raises(CommandError, match="records version 99.*reads.*version 2"):
+    with pytest.raises(CommandError, match="records version 99.*reads.*version 3"):
         read_manifest(path)
 
 
 def test_write_manifest_leaves_no_scratch_file(tmp_path: Path) -> None:
     manifest = ServiceManifest(
-        backend=ServiceBackend.DOCKER,
+        placement=Placement.CONTAINER,
         created="2026-08-07T12:00:00+09:00",
         endpoints={"leader": ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")},
         services={
-            "advisor": DockerService(endpoint="http://localhost:8090", container="hima-advisor-1")
+            "advisor": ContainerService(
+                endpoint="http://localhost:8090", container="hima-advisor-1"
+            )
         },
     )
     path = tmp_path / "manifest.toml"

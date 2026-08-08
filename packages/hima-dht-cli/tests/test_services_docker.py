@@ -1,10 +1,18 @@
-"""Unit tests for hima_dht_cli.services._docker (compose-delegated services).
+"""Unit tests for hima_dht_cli.services._docker (compose-delegated work).
 
 Test cases:
+- test_advisor_address_follows_the_service_placement: a container game
+  addresses a container advisor by service name and a host advisor
+  through the host gateway name.
+- test_compose_up_activates_the_profile_of_a_profiled_service: the webui
+  is invisible to compose until its profile is passed; the advisor needs
+  no profile.
+- test_compose_stop_reverses_the_start_order: services stop in reverse
+  launch order.
 - test_container_names_parses_json_array: pre-v2.21 compose emits one
   JSON array instead of NDJSON; both parse to the same mapping.
 - test_container_names_missing_service_raises: compose listing no
-  container for a managed service raises CommandError naming it.
+  container for a requested service raises CommandError naming it.
 - test_game_image_present_reflects_inspect_exit: `docker image inspect`
   exit 0 reports the image present; non-zero reports it absent.
 - test_ensure_game_image_present_skips_build: an existing image runs no
@@ -13,6 +21,9 @@ Test cases:
   without SC2_LICENSE raises CommandError naming the variable.
 - test_ensure_game_image_builds_with_license_environment: an absent image
   builds via the game profile with SC2_LICENSE in the build environment.
+- test_run_game_passes_the_advisor_address_as_environment: the advisor
+  address enters as an -e override, never as a command flag, so the
+  in-container config chain still resolves it.
 - test_run_game_appends_command_override: forwarded flags become the
   in-container `hima run` command override.
 - test_run_game_empty_args_keeps_compose_command: no forwarded flags keep
@@ -27,7 +38,51 @@ from types import SimpleNamespace
 import pytest
 
 from hima_dht_cli.errors import CommandError
+from hima_dht_cli.placement import Placement
 from hima_dht_cli.services import _docker
+
+
+@pytest.mark.parametrize(
+    "placement,address",
+    [
+        (Placement.CONTAINER, "advisor"),  # same compose network: service name
+        (Placement.HOST, "host.docker.internal"),  # out of the container
+    ],
+)
+def test_advisor_address_follows_the_service_placement(placement: Placement, address: str) -> None:
+    assert _docker.advisor_address(placement) == address
+
+
+def test_compose_up_activates_the_profile_of_a_profiled_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invoked: dict[str, list[str]] = {}
+    monkeypatch.setattr(
+        _docker, "_run_compose", lambda args, extra_env=None: invoked.update(args=args)
+    )
+
+    _docker.compose_up(("advisor", "webui"))
+
+    assert invoked["args"] == [
+        "--profile",
+        "webui",
+        "up",
+        "-d",
+        "--wait",
+        "advisor",
+        "webui",
+    ]
+
+
+def test_compose_stop_reverses_the_start_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    invoked: dict[str, list[str]] = {}
+    monkeypatch.setattr(
+        _docker, "_run_compose", lambda args, extra_env=None: invoked.update(args=args)
+    )
+
+    _docker.compose_stop(("advisor", "webui"))
+
+    assert invoked["args"] == ["--profile", "webui", "stop", "webui", "advisor"]
 
 
 def test_container_names_parses_json_array(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,7 +96,7 @@ def test_container_names_parses_json_array(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(_docker, "_read_compose", fake_read)
 
-    assert _docker.container_names() == {
+    assert _docker.container_names(("advisor", "webui")) == {
         "advisor": "hima-advisor-1",
         "webui": "hima-webui-1",
     }
@@ -54,7 +109,7 @@ def test_container_names_missing_service_raises(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(_docker, "_read_compose", fake_read)
 
     with pytest.raises(CommandError, match="webui"):
-        _docker.container_names()
+        _docker.container_names(("advisor", "webui"))
 
 
 @pytest.mark.parametrize(
@@ -112,6 +167,30 @@ def test_ensure_game_image_builds_with_license_environment(
     assert invoked["extra_env"] == {"SC2_LICENSE": "iagreetotheeula"}
 
 
+def test_run_game_passes_the_advisor_address_as_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invoked: dict[str, list[str]] = {}
+
+    def fake_invoke(args: list[str], extra_env: dict[str, str] | None = None) -> int:
+        invoked["args"] = args
+        return 0
+
+    monkeypatch.setattr(_docker, "_invoke_compose", fake_invoke)
+
+    _docker.run_game([], "host.docker.internal")
+
+    assert invoked["args"] == [
+        "--profile",
+        "game",
+        "run",
+        "--rm",
+        "-e",
+        "HIMA_ADVISOR_HOST=host.docker.internal",
+        "game",
+    ]
+
+
 def test_run_game_appends_command_override(monkeypatch: pytest.MonkeyPatch) -> None:
     invoked: dict[str, list[str]] = {}
 
@@ -121,13 +200,15 @@ def test_run_game_appends_command_override(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr(_docker, "_invoke_compose", fake_invoke)
 
-    _docker.run_game(["--difficulty", "VeryHard", "--seed", "7"])
+    _docker.run_game(["--difficulty", "VeryHard", "--seed", "7"], "advisor")
 
     assert invoked["args"] == [
         "--profile",
         "game",
         "run",
         "--rm",
+        "-e",
+        "HIMA_ADVISOR_HOST=advisor",
         "game",
         "hima",
         "run",
@@ -147,13 +228,13 @@ def test_run_game_empty_args_keeps_compose_command(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(_docker, "_invoke_compose", fake_invoke)
 
-    _docker.run_game([])
+    _docker.run_game([], "advisor")
 
-    assert invoked["args"] == ["--profile", "game", "run", "--rm", "game"]
+    assert invoked["args"][-1] == "game"  # no `hima run` override after the service name
 
 
 def test_run_game_nonzero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_docker, "_invoke_compose", lambda args, extra_env=None: 3)
 
-    with pytest.raises(CommandError, match="headless game exited with code 3"):
-        _docker.run_game([])
+    with pytest.raises(CommandError, match="container game exited with code 3"):
+        _docker.run_game([], "advisor")

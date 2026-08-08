@@ -15,14 +15,26 @@ Test cases:
   endpoint raises CommandError naming the base URL.
 - test_require_services_rejects_missing_model: a served list without the
   leader model raises CommandError naming the model.
-- test_run_headless_requires_docker_manifest: a missing or native-backend
-  manifest aborts with the `hima up --backend docker` remediation.
-- test_run_headless_prechecks_recorded_leader_and_runs_game: the leader
+- test_run_container_without_manifest_raises: a container game with no
+  recorded services aborts with the `hima up` remediation.
+- test_run_container_addresses_the_advisor_by_service_placement: the
+  address handed to the game job follows the recorded service placement,
+  by compose service name or through the host gateway.
+- test_run_container_prechecks_recorded_leader_and_runs_game: the leader
   precheck queries the manifest-recorded endpoint, the image is ensured
   with the license value, and the game job gets the forwarded flags.
-- test_run_headless_unreachable_recorded_leader_raises: an unreachable
+- test_run_container_unreachable_recorded_leader_raises: an unreachable
   recorded leader endpoint raises CommandError naming its URL.
-- test_run_logs_start_and_summary_on_success: run() emits the start
+- test_open_surface_web_opens_the_page_before_the_run: `--ui web` opens
+  the live page in the BEFORE phase.
+- test_open_surface_web_without_a_webui_raises: `--ui web` with no server
+  answering fails naming `hima up --webui`, never running unwatched.
+- test_open_surface_pygui_plays_the_archived_replay_after_the_run:
+  `--ui pygui` opens the renderer on the archived replay in the AFTER
+  phase, and nothing in the BEFORE phase.
+- test_open_surface_none_opens_nothing: the default surface touches
+  neither the browser nor the renderer, in either phase.
+- test_run_logs_start_and_summary_on_success: run_host() emits the start
   record and a summary record carrying the archived run directory.
 - test_run_logs_summary_on_failure: a failed run still emits a summary
   record carrying the error, then re-raises.
@@ -38,7 +50,14 @@ import pytest
 
 from hima_dht_cli import experiment, services
 from hima_dht_cli.errors import CommandError
-from hima_dht_cli.experiment import HeadlessOptions, RunOptions
+from hima_dht_cli.experiment import (
+    ContainerRunOptions,
+    ObservationOptions,
+    ObservationUI,
+    RunOptions,
+    RunPhase,
+)
+from hima_dht_cli.placement import Placement
 from hima_dht_cli.services import DEFAULT_ADVISOR_HOST
 
 
@@ -144,8 +163,8 @@ def test_require_services_rejects_missing_model(
         experiment._require_services(make_options(DEFAULT_ADVISOR_HOST))
 
 
-def make_headless_options(sc2_license: str | None) -> HeadlessOptions:
-    return HeadlessOptions(
+def make_container_options(sc2_license: str | None) -> ContainerRunOptions:
+    return ContainerRunOptions(
         game_args=["--seed", "7"],
         model="qwen3:8b",
         api_key="ollama",
@@ -153,48 +172,33 @@ def make_headless_options(sc2_license: str | None) -> HeadlessOptions:
     )
 
 
-def docker_manifest() -> services.ServiceManifest:
+def recorded_manifest(placement: Placement = Placement.CONTAINER) -> services.ServiceManifest:
     return services.ServiceManifest(
-        backend=services.ServiceBackend.DOCKER,
+        placement=placement,
         created="2026-08-07T12:00:00+09:00",
         endpoints={
             "leader": services.ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")
         },
-        services={},
+        services={
+            "advisor": services.ContainerService(
+                endpoint="http://localhost:8090", container="hima-advisor-1"
+            )
+        },
     )
 
 
-@pytest.mark.parametrize(
-    "manifest",
-    [
-        None,  # no `hima up` recorded services
-        services.ServiceManifest(  # native backend recorded
-            backend=services.ServiceBackend.NATIVE,
-            created="2026-08-07T12:00:00+09:00",
-            endpoints={},
-            services={},
-        ),
-    ],
-)
-def test_run_headless_requires_docker_manifest(
-    monkeypatch: pytest.MonkeyPatch, manifest: services.ServiceManifest | None
-) -> None:
-    monkeypatch.setattr(experiment.services, "read_manifest", lambda: manifest)
-
-    with pytest.raises(CommandError, match="hima up --backend docker"):
-        experiment.run_headless(make_headless_options(None))
-
-
-def test_run_headless_prechecks_recorded_leader_and_runs_game(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def stub_container_run(
+    monkeypatch: pytest.MonkeyPatch, manifest: services.ServiceManifest
+) -> dict[str, object]:
+    """Stub every boundary a container run crosses; return the record."""
     events: dict[str, object] = {}
-    monkeypatch.setattr(experiment.services, "read_manifest", docker_manifest)
 
     def fake_leader_models(base_url: str, api_key: str) -> list[str]:
         events["queried"] = (base_url, api_key)
         return ["qwen3:8b"]
 
+    monkeypatch.setattr(experiment.services, "read_manifest", lambda: manifest)
+    monkeypatch.setattr(experiment.services, "service_healthy", lambda name, endpoint: True)
     monkeypatch.setattr(experiment.services, "leader_models", fake_leader_models)
     monkeypatch.setattr(
         experiment.services,
@@ -202,24 +206,117 @@ def test_run_headless_prechecks_recorded_leader_and_runs_game(
         lambda sc2_license: events.update(license=sc2_license),
     )
     monkeypatch.setattr(
-        experiment.services, "run_game", lambda game_args: events.update(game_args=game_args)
+        experiment.services,
+        "run_game",
+        lambda game_args, advisor_host: events.update(
+            game_args=game_args, advisor_host=advisor_host
+        ),
     )
+    return events
 
-    experiment.run_headless(make_headless_options("iagreetotheeula"))
+
+def test_run_container_without_manifest_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(experiment.services, "read_manifest", lambda: None)
+
+    with pytest.raises(CommandError, match="run `hima up` first"):
+        experiment.run_container(make_container_options(None))
+
+
+@pytest.mark.parametrize(
+    "placement,advisor_host",
+    [
+        (Placement.CONTAINER, "advisor"),  # same compose network
+        (Placement.HOST, "host.docker.internal"),  # host services
+    ],
+)
+def test_run_container_addresses_the_advisor_by_service_placement(
+    monkeypatch: pytest.MonkeyPatch, placement: Placement, advisor_host: str
+) -> None:
+    events = stub_container_run(monkeypatch, recorded_manifest(placement))
+
+    experiment.run_container(make_container_options("iagreetotheeula"))
+
+    assert events["advisor_host"] == advisor_host
+
+
+def test_run_container_prechecks_recorded_leader_and_runs_game(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events = stub_container_run(monkeypatch, recorded_manifest())
+
+    experiment.run_container(make_container_options("iagreetotheeula"))
 
     assert events["queried"] == ("http://localhost:11434/v1", "ollama")
     assert events["license"] == "iagreetotheeula"
     assert events["game_args"] == ["--seed", "7"]
 
 
-def test_run_headless_unreachable_recorded_leader_raises(
+def test_run_container_unreachable_recorded_leader_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(experiment.services, "read_manifest", docker_manifest)
+    monkeypatch.setattr(experiment.services, "read_manifest", recorded_manifest)
+    monkeypatch.setattr(experiment.services, "service_healthy", lambda name, endpoint: True)
     monkeypatch.setattr(experiment.services, "leader_models", lambda base_url, api_key: None)
 
     with pytest.raises(CommandError, match="http://localhost:11434/v1"):
-        experiment.run_headless(make_headless_options(None))
+        experiment.run_container(make_container_options(None))
+
+
+def test_open_surface_web_opens_the_page_before_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr(experiment.services, "service_healthy", lambda name, endpoint: True)
+    monkeypatch.setattr(experiment.webbrowser, "open", lambda url: opened.append(url))
+
+    experiment.open_surface(
+        ObservationOptions(ui=ObservationUI.WEB, webui_url="http://localhost:8080"),
+        RunPhase.BEFORE,
+        None,
+    )
+
+    assert opened == ["http://localhost:8080"]
+
+
+def test_open_surface_web_without_a_webui_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(experiment.services, "service_healthy", lambda name, endpoint: False)
+
+    with pytest.raises(CommandError, match="hima up --webui"):
+        experiment.open_surface(
+            ObservationOptions(ui=ObservationUI.WEB, webui_url="http://localhost:8080"),
+            RunPhase.BEFORE,
+            None,
+        )
+
+
+def test_open_surface_pygui_plays_the_archived_replay_after_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    played: list[Path] = []
+    archived = tmp_path / "game.SC2Replay"
+    archived.write_bytes(b"")
+    monkeypatch.setattr(experiment.replay, "play", lambda path: played.append(path))
+    options = ObservationOptions(ui=ObservationUI.PYGUI)
+
+    experiment.open_surface(options, RunPhase.BEFORE, tmp_path)
+    assert played == []  # nothing is archived yet
+
+    experiment.open_surface(options, RunPhase.AFTER, tmp_path)
+    assert played == [archived]
+
+
+@pytest.mark.parametrize("phase", [RunPhase.BEFORE, RunPhase.AFTER])
+def test_open_surface_none_opens_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, phase: RunPhase
+) -> None:
+    monkeypatch.setattr(
+        experiment.webbrowser, "open", lambda url: pytest.fail("no browser without --ui web")
+    )
+    monkeypatch.setattr(
+        experiment.replay, "play", lambda path: pytest.fail("no renderer without --ui pygui")
+    )
+
+    experiment.open_surface(ObservationOptions(), phase, tmp_path)
 
 
 def test_run_logs_start_and_summary_on_success(
@@ -231,7 +328,7 @@ def test_run_logs_start_and_summary_on_success(
     monkeypatch.setattr(experiment, "_print_metric", lambda run_dir: None)
 
     with caplog.at_level(logging.INFO, logger="hima_dht_cli.experiment"):
-        experiment.run(make_options(DEFAULT_ADVISOR_HOST))
+        experiment.run_host(make_options(DEFAULT_ADVISOR_HOST))
 
     messages = [record.getMessage() for record in caplog.records]
     assert any(message.startswith("run starting: difficulty=Hard") for message in messages)
@@ -253,7 +350,7 @@ def test_run_logs_summary_on_failure(
         caplog.at_level(logging.INFO, logger="hima_dht_cli.experiment"),
         pytest.raises(CommandError, match="boom"),
     ):
-        experiment.run(make_options(DEFAULT_ADVISOR_HOST))
+        experiment.run_host(make_options(DEFAULT_ADVISOR_HOST))
 
     failures = [
         record
