@@ -25,10 +25,10 @@ Native run (the retail macOS client renders the game on screen — for watching
 a game live):
 
 ```sh
-uv run hima up        # launch advisor + webui; provision a local Ollama only when
-                      # the leader URL is the default, else verify the endpoint
-uv run hima run       # play one game, archive its outputs under runs/
-uv run hima metrics   # aggregate metric.json across runs/
+brew services start ollama  # leader: native Metal Ollama on 11434, you own it
+uv run hima up              # launch advisor + webui; verify the leader endpoint
+uv run hima run             # play one game, archive its outputs under runs/
+uv run hima metrics         # aggregate metric.json across runs/
 ```
 
 Headless run (the game plays in a container with no display — for batch
@@ -37,7 +37,6 @@ host's native Ollama, see "Run modes and the leader engine"):
 
 ```sh
 uv run hima down                # free the ports held by the native services
-brew services start ollama      # leader: native Metal Ollama on 11434
 
 uv run hima up --backend docker # advisor + webui containers; verifies the leader endpoint
 uv run hima status              # every check ✓ before running
@@ -54,15 +53,15 @@ open http://localhost:8123      # observation webui
 Restore the native steady state afterwards:
 
 ```sh
-uv run hima down && brew services stop ollama && uv run hima up
+uv run hima down && uv run hima up
 ```
 
 ## Run modes and the leader engine
 
 - **Native**: everything runs as host processes. `hima up` spawns and owns
-  `ollama serve`, the advisor, and the webui (pid files under
-  `tmp/services/`); `hima run` launches the retail macOS client, which
-  renders the game. This is the default and the fastest setup.
+  the advisor and the webui (pid files under `tmp/services/`); `hima run`
+  launches the retail macOS client, which renders the game. This is the
+  default and the fastest setup.
 - **Headless**: the game runs in a container as the SC2 4.10 Linux client
   under qemu-user emulation — no display, suitable for unattended batch
   experiments. It reaches the advisor as a compose service and the leader
@@ -75,12 +74,11 @@ uv run hima down && brew services stop ollama && uv run hima up
   Games are LLM-bound — the leader engine sets the experiment's wall clock.
   The compose `ollama` service (opt-in profile `leader`) exists for Linux
   hosts with NVIDIA GPUs.
-- In the native flow, `hima up` provisions `ollama serve` itself when the
-  leader URL is the local default. With `--backend docker` it never
-  provisions the leader — it verifies the configured endpoint and fails
-  fast, so run the leader yourself (`brew services start ollama`, since
-  `hima down` has stopped the hima-owned one) or point
-  `HIMA_LEADER_BASE_URL` at any OpenAI-compatible server.
+- **The leader engine is yours, on both backends**: `hima up` never starts,
+  stops, or pulls for it — it verifies that `HIMA_LEADER_BASE_URL` serves
+  `HIMA_LEADER_MODEL` and fails fast when it does not. Run the engine
+  however you like: `brew services start ollama`, the opt-in compose
+  `leader` profile, or any OpenAI-compatible provider.
 
 ## Configuration
 

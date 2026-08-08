@@ -2,9 +2,9 @@
 # client cannot run in a Linux container, and macOS Docker has no Metal/MPS
 # passthrough. The host `hima run` reaches these services with its localhost
 # defaults. The leader is an endpoint contract, never a managed service:
-# `hima up` provisions the host's native Ollama or verifies
-# HIMA_LEADER_BASE_URL; the ollama/leader-baked services below are opt-in
-# profile alternatives selected by pointing HIMA_LEADER_BASE_URL at them.
+# `hima up` only verifies HIMA_LEADER_BASE_URL and never starts an engine on
+# any backend; the ollama/leader-baked services below are opt-in profile
+# alternatives selected by pointing HIMA_LEADER_BASE_URL at them.
 #
 # Default set — `hima up --backend docker` runs advisor + webui and records
 # the manifest:
@@ -73,8 +73,8 @@ services:
     profiles: ["leader"]
     image: ollama/ollama:0.32.5
     # Published so the host reaches the containerized engine. A native
-    # `ollama serve` already holding the port fails this publish with an
-    # explicit bind error — move HIMA_OLLAMA_PORT to run both side by side.
+    # A host `ollama serve` already holding the port fails this publish with
+    # an explicit bind error — move HIMA_OLLAMA_PORT to run both side by side.
     ports:
       - "${HIMA_OLLAMA_PORT:-11434}:11434"
     volumes:
