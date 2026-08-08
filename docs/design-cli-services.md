@@ -29,8 +29,7 @@ compose services: `design-deployment.md`.
 ### ServiceSpec (`services._native`)
 - **Responsibility**: Describe one natively spawned background service.
 - **Fields**: `name: str`, `argv: list[str]`, `health_url: str`,
-  `pid_file: Path`, `log_file: Path`, `process_keyword: str`,
-  `env: Mapping[str, str]` (extra spawn environment; Ollama's bind address).
+  `pid_file: Path`, `log_file: Path`, `process_keyword: str`.
 - **Methods**: none (data holder). `process_keyword` guards `down`: a stored PID is
   killed only when its command line contains this keyword.
 
@@ -38,9 +37,8 @@ compose services: `design-deployment.md`.
 - **Responsibility**: Backend, endpoint, and model selection for the managed
   services, resolved by `cli` and passed as one parameter object.
 - **Fields**: `backend: ServiceBackend`, `advisor_port: int`,
-  `webui_port: int`, `ollama_port: int`, `model: str`,
-  `leader_base_url: str`, `leader_api_key: str` — each defaulting to
-  the owning module's constant.
+  `webui_port: int`, `model: str`, `leader_base_url: str`,
+  `leader_api_key: str` — each defaulting to the owning module's constant.
 - **Methods**: none (data holder).
 
 ### ServiceBackend (`services._manifest`)
@@ -75,21 +73,18 @@ compose services: `design-deployment.md`.
 
 ## Function Specifications
 
-- **up(options, skip_pull, manifest_out) -> None** — Behavior:
+- **up(options, manifest_out) -> None** — Behavior:
   serialize against every other `up`/`down` via an exclusive non-blocking
   lock on `tmp/services/up-down.lock` (released on close or process exit —
   a crashed holder never wedges it), then dispatch on `options.backend`.
-  Leader handling is common to both backends: when
-  `options.leader_base_url` equals the local default derived from the
-  ollama port (`http://localhost:{ollama_port}/v1`, textual comparison) the
-  native backend provisions `ollama serve` and ensures the leader model
-  (host `ollama pull` when absent unless `skip_pull`); any other URL — and
-  every URL on the docker backend — is verified instead: `GET
-  {url}/models` with the bearer key must list `options.model`.
-  `NATIVE`: ensure the services in dependency order — the provisioned
-  `ollama serve` (bound to `ollama_port` via `OLLAMA_HOST`) when the rule
-  selects it, the advisor FastAPI server (`uvicorn --factory` on
-  `hima_dht_game.app`), the observation webui (`uvicorn --factory` on
+  Leader handling is identical on both backends and is verification only:
+  `GET {options.leader_base_url}/models` with the bearer key must list
+  `options.model`. hima never starts, stops, or pulls for a leader engine
+  on any backend — the engine is operator-owned, whether a host
+  `ollama serve`, the opt-in compose `leader` profile, or a hosted
+  provider.
+  `NATIVE`: ensure the advisor FastAPI server (`uvicorn --factory` on
+  `hima_dht_game.app`) and the observation webui (`uvicorn --factory` on
   `hima_dht_web.server`); each ensure is ownership-aware — an owned live
   pid (pid file + matching command line + process-group leader)
   short-circuits, while an endpoint answering without an owned pid is a
@@ -101,14 +96,13 @@ compose services: `design-deployment.md`.
   Both paths write the manifest recording the leader `ModelEndpoint`;
   `manifest_out` writes a copy. Errors: `CommandError` when the service
   lock is held, when health is not reached within the attempt bound, on a
-  foreign endpoint, on a compose failure, when the verified leader
-  endpoint is unreachable or does not serve the model, or when the model
-  is absent under `skip_pull`.
+  foreign endpoint, on a compose failure, or when the leader endpoint is
+  unreachable or does not serve the model.
 - **down() -> None** — Behavior: serialize via the same
   service lock as `up`, then read the manifest; backend
   `DOCKER` → `docker compose stop` of the recorded services; backend
   `NATIVE` or no manifest → stop PIDs recorded in pid files in
-  reverse launch order (webui, advisor, ollama) after verifying ownership
+  reverse launch order (webui, advisor) after verifying ownership
   (command line matches `process_keyword` and the pid is its own
   process-group leader); each stop signals the whole process group SIGTERM,
   waits 10 s, escalates to SIGKILL, waits 5 s more; never touches other

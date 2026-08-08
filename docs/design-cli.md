@@ -38,15 +38,16 @@ infrastructure, no domain semantics, no non-trivial algorithm. The
   code default. Environment lookup is declared per option (typer `envvar`);
   no hand-rolled resolution or conversion. The `HIMA_*` keys are shared with
   docker compose interpolation (`.env.example`); `HIMA_SERVICE_BACKEND`,
-  `HIMA_OLLAMA_PORT`, `HIMA_LEADER_BASE_URL`, and `HIMA_LEADER_API_KEY` join
+  `HIMA_LEADER_BASE_URL`, and `HIMA_LEADER_API_KEY` join
   them for `up`/`status`; `SC2_LICENSE` enters `run --headless` the same way
-  (envvar-backed option, no default, never persisted). Closed value sets
+  (envvar-backed option, accepted once in `.env`, no code default, never
+  persisted by hima). Closed value sets
   (difficulty, race, service backend) are enums. Core modules never read the environment;
   they receive resolved values.
 - **Extension seams**: a new LLM role adds a `ModelEndpoint` row under its
   role key in the manifest `[endpoints]` table plus its own
-  `HIMA_<ROLE>_BASE_URL/MODEL/API_KEY` keys — the provisioning and
-  verification mechanics are role-agnostic; a new advisor-like service adds
+  `HIMA_<ROLE>_BASE_URL/MODEL/API_KEY` keys — the endpoint-verification
+  mechanics are role-agnostic; a new advisor-like service adds
   a `ServiceSpec`, a `_health` probe-path row, and a compose service; run
   orchestration variants extend `RunOptions`. The command surface (nine
   domain verbs) does not grow with these extensions. In-game agent society

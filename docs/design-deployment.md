@@ -78,20 +78,18 @@ services, and their interfaces. No classes; components only.
   holding the `runs/` and `tmp/` bind mounts.
 
 - Service lifecycle boundary: `hima up`/`down`/`status` manage the hima-owned
-  long-lived services only — `advisor` and `webui` on the docker backend;
-  the same two plus a conditionally provisioned native `ollama serve` on the
-  native backend. The leader is consumed through its endpoint, never managed
-  as a compose service. The `game` service is a one-shot job in the run
-  lifecycle: launched per game by `hima run --headless` via the `game`
-  profile, exits with the run, never managed by `up`/`down`.
+  long-lived services only — `advisor` and `webui`, identically on both
+  backends. The leader is consumed through its endpoint, never managed as a
+  hima-owned process or a compose service. The `game` service is a one-shot
+  job in the run lifecycle: launched per game by `hima run --headless` via
+  the `game` profile, exits with the run, never managed by `up`/`down`.
 - Leader responsibility split: hima owns verification of the leader endpoint
   (`GET {HIMA_LEADER_BASE_URL}/models` with the bearer key, at `up` and at
-  `run`), never the engine behind it. One exception on the native backend:
-  `hima up` provisions a local `ollama serve` when the resolved leader URL
-  equals the local default derived from the ollama port
-  (`http://localhost:{HIMA_OLLAMA_PORT}/v1`). The comparison is textual —
-  any other URL, including `http://127.0.0.1:11434/v1` naming an externally
-  managed local server, switches `up` to verify-only.
+  `run`), never the engine behind it — on either backend and with no
+  exception. The operator owns the engine's lifecycle: a host
+  `ollama serve` (`brew services start ollama` on macOS), the opt-in
+  compose `leader` profile, or a hosted provider. hima never spawns,
+  stops, or pulls models for it.
 - `hima up --backend native|docker` (`HIMA_SERVICE_BACKEND`, default native)
   selects where the managed services run: native host processes, or these
   compose services via `docker compose up -d --wait`. Every successful `up`
