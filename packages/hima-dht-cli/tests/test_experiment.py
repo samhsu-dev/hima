@@ -15,6 +15,13 @@ Test cases:
   endpoint raises CommandError naming the base URL.
 - test_require_services_rejects_missing_model: a served list without the
   leader model raises CommandError naming the model.
+- test_run_headless_requires_docker_manifest: a missing or native-backend
+  manifest aborts with the `hima up --backend docker` remediation.
+- test_run_headless_prechecks_recorded_leader_and_runs_game: the leader
+  precheck queries the manifest-recorded endpoint, the image is ensured
+  with the license value, and the game job gets the forwarded flags.
+- test_run_headless_unreachable_recorded_leader_raises: an unreachable
+  recorded leader endpoint raises CommandError naming its URL.
 - test_run_logs_start_and_summary_on_success: run() emits the start
   record and a summary record carrying the archived run directory.
 - test_run_logs_summary_on_failure: a failed run still emits a summary
@@ -29,9 +36,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from hima_dht_cli import experiment
+from hima_dht_cli import experiment, services
 from hima_dht_cli.errors import CommandError
-from hima_dht_cli.experiment import RunOptions
+from hima_dht_cli.experiment import HeadlessOptions, RunOptions
 from hima_dht_cli.services import DEFAULT_ADVISOR_HOST
 
 
@@ -135,6 +142,84 @@ def test_require_services_rejects_missing_model(
 
     with pytest.raises(CommandError, match="qwen3:8b"):
         experiment._require_services(make_options(DEFAULT_ADVISOR_HOST))
+
+
+def make_headless_options(sc2_license: str | None) -> HeadlessOptions:
+    return HeadlessOptions(
+        game_args=["--seed", "7"],
+        model="qwen3:8b",
+        api_key="ollama",
+        sc2_license=sc2_license,
+    )
+
+
+def docker_manifest() -> services.ServiceManifest:
+    return services.ServiceManifest(
+        backend=services.ServiceBackend.DOCKER,
+        created="2026-08-07T12:00:00+09:00",
+        endpoints={
+            "leader": services.ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")
+        },
+        services={},
+    )
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        None,  # no `hima up` recorded services
+        services.ServiceManifest(  # native backend recorded
+            backend=services.ServiceBackend.NATIVE,
+            created="2026-08-07T12:00:00+09:00",
+            endpoints={},
+            services={},
+        ),
+    ],
+)
+def test_run_headless_requires_docker_manifest(
+    monkeypatch: pytest.MonkeyPatch, manifest: services.ServiceManifest | None
+) -> None:
+    monkeypatch.setattr(experiment.services, "read_manifest", lambda: manifest)
+
+    with pytest.raises(CommandError, match="hima up --backend docker"):
+        experiment.run_headless(make_headless_options(None))
+
+
+def test_run_headless_prechecks_recorded_leader_and_runs_game(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: dict[str, object] = {}
+    monkeypatch.setattr(experiment.services, "read_manifest", docker_manifest)
+
+    def fake_leader_models(base_url: str, api_key: str) -> list[str]:
+        events["queried"] = (base_url, api_key)
+        return ["qwen3:8b"]
+
+    monkeypatch.setattr(experiment.services, "leader_models", fake_leader_models)
+    monkeypatch.setattr(
+        experiment.services,
+        "ensure_game_image",
+        lambda sc2_license: events.update(license=sc2_license),
+    )
+    monkeypatch.setattr(
+        experiment.services, "run_game", lambda game_args: events.update(game_args=game_args)
+    )
+
+    experiment.run_headless(make_headless_options("iagreetotheeula"))
+
+    assert events["queried"] == ("http://localhost:11434/v1", "ollama")
+    assert events["license"] == "iagreetotheeula"
+    assert events["game_args"] == ["--seed", "7"]
+
+
+def test_run_headless_unreachable_recorded_leader_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(experiment.services, "read_manifest", docker_manifest)
+    monkeypatch.setattr(experiment.services, "leader_models", lambda base_url, api_key: None)
+
+    with pytest.raises(CommandError, match="http://localhost:11434/v1"):
+        experiment.run_headless(make_headless_options(None))
 
 
 def test_run_logs_start_and_summary_on_success(

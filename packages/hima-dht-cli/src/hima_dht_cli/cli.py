@@ -15,6 +15,11 @@ from typing import Annotated
 import typer
 import uvicorn
 from dotenv import load_dotenv
+
+# typer 0.27 vendors click as `typer._click` and re-exports no
+# ParameterSource; the standalone `click` distribution's enum is a
+# different class, so identity checks against it always fail.
+from typer._click.core import ParameterSource
 from uvicorn.config import STARTUP_FAILURE
 
 from hima_dht_cli import experiment, services, viewer
@@ -45,6 +50,10 @@ ENV_OLLAMA_PORT = "HIMA_OLLAMA_PORT"
 # Also read by the game process (hima_dht_game.main), which inherits this
 # process's environment; the contract is documented in .env.example.
 ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
+# Blizzard AI and Machine Learning License acceptance, consumed only by the
+# game-image build (docker/game.Dockerfile); no HIMA_ prefix — it is the
+# compose build-arg name. No default, never persisted.
+ENV_SC2_LICENSE = "SC2_LICENSE"
 
 DEFAULT_LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -162,6 +171,7 @@ def status(
 
 @app.command()
 def run(
+    ctx: typer.Context,
     difficulty: Annotated[Difficulty, typer.Option()] = Difficulty.Hard,
     enemy_race: Annotated[Race, typer.Option()] = Race.Zerg,
     seed: Annotated[int, typer.Option()] = 3,
@@ -171,21 +181,80 @@ def run(
     base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
     api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
     realtime: Annotated[bool, typer.Option("--realtime")] = False,
+    headless: Annotated[bool, typer.Option("--headless")] = False,
+    sc2_license: Annotated[str | None, typer.Option(envvar=ENV_SC2_LICENSE)] = None,
 ) -> None:
     """Play one game and archive its outputs under runs/."""
-    experiment.run(
-        experiment.RunOptions(
-            difficulty=difficulty.value,
-            enemy_race=enemy_race.value,
-            seed=seed,
-            port=port,
-            advisor_host=advisor_host,
-            model=model,
-            base_url=base_url,
-            api_key=api_key,
-            realtime=realtime,
-        )
+    options = experiment.RunOptions(
+        difficulty=difficulty.value,
+        enemy_race=enemy_race.value,
+        seed=seed,
+        port=port,
+        advisor_host=advisor_host,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        realtime=realtime,
     )
+    if headless:
+        _reject_host_flags(ctx)
+        experiment.run_headless(
+            experiment.HeadlessOptions(
+                game_args=_headless_args(ctx, options),
+                model=options.model,
+                api_key=options.api_key,
+                sc2_license=sc2_license,
+            )
+        )
+        return
+    experiment.run(options)
+
+
+# Host-topology flags meaningless inside the game container, mapped to the
+# HIMA_* key the container resolves instead (docker-compose.yml).
+_HOST_FLAG_KEYS = {
+    "port": ENV_ADVISOR_PORT,
+    "advisor_host": ENV_ADVISOR_HOST,
+    "base_url": ENV_LEADER_BASE_URL,
+    "api_key": ENV_LEADER_API_KEY,
+}
+
+
+def _reject_host_flags(ctx: typer.Context) -> None:
+    explicit = [
+        (param, key)
+        for param, key in _HOST_FLAG_KEYS.items()
+        if ctx.get_parameter_source(param) is ParameterSource.COMMANDLINE
+    ]
+    if not explicit:
+        return
+    flags = ", ".join(f"--{param.replace('_', '-')}" for param, _ in explicit)
+    keys = ", ".join(key for _, key in explicit)
+    raise CommandError(
+        f"{flags} cannot combine with --headless — the game container resolves "
+        f"these from its environment; set {keys} in .env or export them instead"
+    )
+
+
+def _headless_args(ctx: typer.Context, options: experiment.RunOptions) -> list[str]:
+    # Only flags passed explicitly on the command line forward into the
+    # container; environment- and default-sourced values resolve inside it,
+    # keeping the precedence chain (flag > environment > .env > default).
+    values = {
+        "difficulty": options.difficulty,
+        "enemy_race": options.enemy_race,
+        "seed": str(options.seed),
+        "model": options.model,
+    }
+    args = [
+        part
+        for param, value in values.items()
+        if ctx.get_parameter_source(param) is ParameterSource.COMMANDLINE
+        for part in (f"--{param.replace('_', '-')}", value)
+    ]
+    if ctx.get_parameter_source("realtime") is ParameterSource.COMMANDLINE:
+        args.append("--realtime")
+    return args
 
 
 @app.command()

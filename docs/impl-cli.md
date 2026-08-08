@@ -61,7 +61,11 @@ vendor documentation.
 - **[click]** `ctx.get_parameter_source("param")` on a `typer.Context`
   parameter — returns `ParameterSource.COMMANDLINE`, `.ENVIRONMENT`, or
   `.DEFAULT` (verified, click 8.4 via typer 0.27); distinguishes an explicit
-  flag from env/default values for headless flag forwarding.
+  flag from env/default values for headless flag forwarding. typer 0.27
+  vendors click as `typer._click` with no public re-export: import
+  `ParameterSource` from `typer._click.core` — the standalone `click`
+  distribution's enum is a different class, so identity checks against it
+  always fail (verified via mypy comparison-overlap and at runtime).
 - **[ollama]** `OLLAMA_HOST=127.0.0.1:<port>` — environment consumed by both
   `ollama serve` (bind address) and the `ollama pull` client (target server).
 

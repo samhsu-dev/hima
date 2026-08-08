@@ -29,6 +29,22 @@ class RunOptions:
     realtime: bool
 
 
+@dataclass(frozen=True)
+class HeadlessOptions:
+    """One containerized game: forwarded flags and host-side precheck values.
+
+    `game_args` holds only the game-semantic flags the user passed
+    explicitly on the host command line; environment- and default-sourced
+    values resolve inside the container, keeping the precedence chain
+    intact. `sc2_license` is consumed by the image build only.
+    """
+
+    game_args: list[str]
+    model: str
+    api_key: str
+    sc2_license: str | None
+
+
 def run(options: RunOptions) -> None:
     # A game runs for hours and can die silently; the start record makes a
     # missing summary record diagnosable.
@@ -52,6 +68,54 @@ def run(options: RunOptions) -> None:
         raise
     logger.info("run archived: run_dir=%s duration_s=%.0f", run_dir, time.monotonic() - started)
     _print_metric(run_dir)
+
+
+def run_headless(options: HeadlessOptions) -> None:
+    """Run one containerized game against the docker service backend.
+
+    The in-container `hima run` performs its own prechecks, archives the
+    run, and prints the metric summary; output streams to this console.
+
+    Raises:
+        CommandError: no docker-backend manifest, an unreachable leader
+            endpoint or unserved model, a missing image without
+            SC2_LICENSE, a failed build, or a non-zero game exit.
+    """
+    manifest = _require_docker_manifest()
+    _require_recorded_leader(manifest, options)
+    services.ensure_game_image(options.sc2_license)
+    services.run_game(options.game_args)
+
+
+def _require_docker_manifest() -> services.ServiceManifest:
+    manifest = services.read_manifest()
+    if manifest is None or manifest.backend is not services.ServiceBackend.DOCKER:
+        raise CommandError(
+            "headless games run against the docker service backend — "
+            "run `hima down && hima up --backend docker` first"
+        )
+    return manifest
+
+
+def _require_recorded_leader(manifest: services.ServiceManifest, options: HeadlessOptions) -> None:
+    # The recorded URL is the host-view endpoint `up` verified; the game
+    # container resolves its own HIMA_LEADER_BASE_URL at run time.
+    endpoint = manifest.endpoints.get("leader")
+    if endpoint is None:
+        raise CommandError(
+            "no leader endpoint recorded in the manifest — run `hima up --backend docker`"
+        )
+    served = services.leader_models(endpoint.url, options.api_key)
+    if served is None:
+        raise CommandError(
+            f"leader endpoint not reachable at {endpoint.url} — "
+            "run `hima up --backend docker` or check HIMA_LEADER_BASE_URL"
+        )
+    if not services.model_served(options.model, served):
+        raise CommandError(
+            f"leader model {options.model} not served at {endpoint.url} — "
+            "pull it there or check --model / HIMA_LEADER_MODEL"
+        )
 
 
 def _play_and_archive(options: RunOptions) -> Path:

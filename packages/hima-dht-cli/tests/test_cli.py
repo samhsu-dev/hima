@@ -15,6 +15,13 @@ Test cases:
   HIMA_ADVISOR_PORT.
 - test_run_defaults_read_environment: `hima run` takes advisor host and
   leader base URL defaults from HIMA_* variables.
+- test_run_headless_forwards_only_explicit_flags: `hima run --headless`
+  forwards command-line game flags into the container override while
+  environment-sourced values stay out of it.
+- test_run_headless_rejects_host_flags: a host-topology flag combined
+  with --headless raises CommandError naming the HIMA_* key.
+- test_run_headless_reads_sc2_license_environment: `hima run --headless`
+  takes the license default from SC2_LICENSE.
 - test_serve_defaults_read_environment: `hima serve` takes its bind host
   default from HIMA_WEBUI_HOST.
 - test_invalid_port_environment_exits_usage_error: a non-integer
@@ -112,6 +119,44 @@ def test_run_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "advisor",
         "http://ollama:11434/v1",
     )
+
+
+def test_run_headless_forwards_only_explicit_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HIMA_LEADER_MODEL", "qwen3:32b")
+    captured: dict[str, experiment.HeadlessOptions] = {}
+    monkeypatch.setattr(
+        experiment, "run_headless", lambda options: captured.update(options=options)
+    )
+
+    result = runner.invoke(
+        cli.app, ["run", "--headless", "--difficulty", "VeryHard", "--seed", "7"]
+    )
+
+    assert result.exit_code == 0
+    assert captured["options"].game_args == ["--difficulty", "VeryHard", "--seed", "7"]
+    assert captured["options"].model == "qwen3:32b"
+
+
+def test_run_headless_rejects_host_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(experiment, "run_headless", lambda options: None)
+
+    result = runner.invoke(cli.app, ["run", "--headless", "--port", "9001"])
+
+    assert isinstance(result.exception, CommandError)
+    assert "HIMA_ADVISOR_PORT" in str(result.exception)
+
+
+def test_run_headless_reads_sc2_license_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SC2_LICENSE", "iagreetotheeula")
+    captured: dict[str, experiment.HeadlessOptions] = {}
+    monkeypatch.setattr(
+        experiment, "run_headless", lambda options: captured.update(options=options)
+    )
+
+    result = runner.invoke(cli.app, ["run", "--headless"])
+
+    assert result.exit_code == 0
+    assert captured["options"].sc2_license == "iagreetotheeula"
 
 
 def test_serve_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,8 @@
-"""Compose-delegated services: `docker compose` invocations for the docker backend."""
+"""Compose-delegated services and the game job: `docker compose` invocations."""
 
 import json
 import logging
+import os
 import subprocess
 import time
 from typing import cast
@@ -18,6 +19,9 @@ COMPOSE_SERVICES = ("advisor", "webui")
 
 # Image tag of the containerized game, fixed by docker-compose.yml.
 GAME_IMAGE = "hima-game"
+
+# Compose service (and profile) name of the containerized game job.
+GAME_SERVICE = "game"
 
 
 def game_image_present() -> bool:
@@ -63,12 +67,66 @@ def _ps_rows(output: str) -> list[dict[str, str]]:
     return [json.loads(line) for line in output.splitlines() if line.strip()]
 
 
-def _run_compose(args: list[str]) -> None:
-    # Start record at INFO: `up --wait` and `pull` can run for minutes.
+def ensure_game_image(sc2_license: str | None) -> None:
+    """Build the game image when it is absent from the local image store.
+
+    Args:
+        sc2_license: Blizzard AI and Machine Learning License acceptance —
+            the SC2 archive's unzip password. Consumed by the build only,
+            never persisted.
+
+    Raises:
+        CommandError: the image is absent and `sc2_license` is None, or
+            the build fails.
+    """
+    if game_image_present():
+        return
+    if sc2_license is None:
+        raise CommandError(
+            f"game image {GAME_IMAGE} absent and SC2_LICENSE is not set — building it "
+            f"downloads the SC2 archive, whose unzip password is Blizzard's AI and "
+            f"Machine Learning License acceptance; set SC2_LICENSE to accept and build"
+        )
+    logger.info("building game image: image=%s (first build downloads multiple GB)", GAME_IMAGE)
+    _run_compose(
+        ["--profile", GAME_SERVICE, "build", GAME_SERVICE],
+        extra_env={"SC2_LICENSE": sc2_license},
+    )
+
+
+def run_game(game_args: list[str]) -> None:
+    """Run one containerized game via `docker compose run`, streaming output.
+
+    An empty `game_args` keeps the compose-file command; a non-empty list
+    overrides it with `hima run <game_args>`.
+
+    Raises:
+        CommandError: the game exits non-zero, carrying the exit code.
+    """
+    args = ["--profile", GAME_SERVICE, "run", "--rm", GAME_SERVICE]
+    if game_args:
+        args += ["hima", "run", *game_args]
+    exit_code = _invoke_compose(args)
+    if exit_code != 0:
+        raise CommandError(f"headless game exited with code {exit_code}")
+
+
+def _run_compose(args: list[str], extra_env: dict[str, str] | None = None) -> None:
+    exit_code = _invoke_compose(args, extra_env)
+    if exit_code != 0:
+        raise CommandError(f"`docker compose {' '.join(args)}` failed with code {exit_code}")
+
+
+def _invoke_compose(args: list[str], extra_env: dict[str, str] | None = None) -> int:
+    # Streams output and returns the exit code so `run_game` can report the
+    # game's own exit distinctly from a compose failure. Start record at
+    # INFO: `up --wait`, `build`, and `run` can run for minutes. The args
+    # never carry secrets — `extra_env` stays out of every record.
     logger.info("docker compose starting: args=%s", args)
     started = time.monotonic()
+    env = None if extra_env is None else os.environ | extra_env
     try:
-        completed = subprocess.run(["docker", "compose", *args], cwd=RUN_ROOT)
+        completed = subprocess.run(["docker", "compose", *args], cwd=RUN_ROOT, env=env)
     except FileNotFoundError as error:
         raise CommandError(
             "docker executable not found; the docker backend needs Docker"
@@ -79,10 +137,7 @@ def _run_compose(args: list[str]) -> None:
         completed.returncode,
         time.monotonic() - started,
     )
-    if completed.returncode != 0:
-        raise CommandError(
-            f"`docker compose {' '.join(args)}` failed with code {completed.returncode}"
-        )
+    return completed.returncode
 
 
 def _read_compose(args: list[str]) -> str:

@@ -7,6 +7,18 @@ Test cases:
   container for a managed service raises CommandError naming it.
 - test_game_image_present_reflects_inspect_exit: `docker image inspect`
   exit 0 reports the image present; non-zero reports it absent.
+- test_ensure_game_image_present_skips_build: an existing image runs no
+  compose build.
+- test_ensure_game_image_absent_without_license_raises: an absent image
+  without SC2_LICENSE raises CommandError naming the variable.
+- test_ensure_game_image_builds_with_license_environment: an absent image
+  builds via the game profile with SC2_LICENSE in the build environment.
+- test_run_game_appends_command_override: forwarded flags become the
+  in-container `hima run` command override.
+- test_run_game_empty_args_keeps_compose_command: no forwarded flags keep
+  the compose-file command.
+- test_run_game_nonzero_exit_raises: a non-zero game exit raises
+  CommandError carrying the code.
 """
 
 import json
@@ -62,3 +74,86 @@ def test_game_image_present_reflects_inspect_exit(
     monkeypatch.setattr(_docker.subprocess, "run", fake_run)
 
     assert _docker.game_image_present() is present
+
+
+def test_ensure_game_image_present_skips_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    built: list[list[str]] = []
+    monkeypatch.setattr(_docker, "game_image_present", lambda: True)
+    monkeypatch.setattr(_docker, "_run_compose", lambda args, extra_env=None: built.append(args))
+
+    _docker.ensure_game_image("iagreetotheeula")
+
+    assert built == []
+
+
+def test_ensure_game_image_absent_without_license_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_docker, "game_image_present", lambda: False)
+
+    with pytest.raises(CommandError, match="SC2_LICENSE"):
+        _docker.ensure_game_image(None)
+
+
+def test_ensure_game_image_builds_with_license_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invoked: dict[str, object] = {}
+
+    def fake_run_compose(args: list[str], extra_env: dict[str, str] | None = None) -> None:
+        invoked.update(args=args, extra_env=extra_env)
+
+    monkeypatch.setattr(_docker, "game_image_present", lambda: False)
+    monkeypatch.setattr(_docker, "_run_compose", fake_run_compose)
+
+    _docker.ensure_game_image("iagreetotheeula")
+
+    assert invoked["args"] == ["--profile", "game", "build", "game"]
+    assert invoked["extra_env"] == {"SC2_LICENSE": "iagreetotheeula"}
+
+
+def test_run_game_appends_command_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    invoked: dict[str, list[str]] = {}
+
+    def fake_invoke(args: list[str], extra_env: dict[str, str] | None = None) -> int:
+        invoked["args"] = args
+        return 0
+
+    monkeypatch.setattr(_docker, "_invoke_compose", fake_invoke)
+
+    _docker.run_game(["--difficulty", "VeryHard", "--seed", "7"])
+
+    assert invoked["args"] == [
+        "--profile",
+        "game",
+        "run",
+        "--rm",
+        "game",
+        "hima",
+        "run",
+        "--difficulty",
+        "VeryHard",
+        "--seed",
+        "7",
+    ]
+
+
+def test_run_game_empty_args_keeps_compose_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    invoked: dict[str, list[str]] = {}
+
+    def fake_invoke(args: list[str], extra_env: dict[str, str] | None = None) -> int:
+        invoked["args"] = args
+        return 0
+
+    monkeypatch.setattr(_docker, "_invoke_compose", fake_invoke)
+
+    _docker.run_game([])
+
+    assert invoked["args"] == ["--profile", "game", "run", "--rm", "game"]
+
+
+def test_run_game_nonzero_exit_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_docker, "_invoke_compose", lambda args, extra_env=None: 3)
+
+    with pytest.raises(CommandError, match="headless game exited with code 3"):
+        _docker.run_game([])

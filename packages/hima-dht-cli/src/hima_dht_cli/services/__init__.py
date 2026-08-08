@@ -1,4 +1,4 @@
-"""Managed background services: advisor server, Ollama, and the webui."""
+"""Managed background services and the containerized game job."""
 
 __all__ = [
     "DEFAULT_ADVISOR_HOST",
@@ -17,13 +17,16 @@ __all__ = [
     "ServiceSpec",
     "advisor_healthy",
     "down",
+    "ensure_game_image",
     "leader_models",
     "model_served",
     "read_manifest",
+    "run_game",
     "status",
     "up",
 ]
 
+from ._docker import ensure_game_image, run_game
 from ._health import (
     DEFAULT_ADVISOR_HOST,
     advisor_healthy,
