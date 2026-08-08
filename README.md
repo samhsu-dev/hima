@@ -42,10 +42,10 @@ brew services start ollama      # leader: native Metal Ollama on 11434
 uv run hima up --backend docker # advisor + webui containers; verifies the leader endpoint
 uv run hima status              # every check ✓ before running
 
-# one headless game, archived under runs/; the first run builds the game
-# image (multi-GB download) — SC2_LICENSE accepts the Blizzard AI and
-# Machine Learning License at build time only, never stored
-SC2_LICENSE=iagreetotheeula uv run hima run --headless
+# once per machine, in .env: SC2_LICENSE=iagreetotheeula accepts the
+# Blizzard AI and Machine Learning License; the first run then builds
+# the game image (multi-GB download)
+uv run hima run --headless      # one headless game, archived under runs/
 
 uv run hima metrics             # aggregate results
 open http://localhost:8123      # observation webui
