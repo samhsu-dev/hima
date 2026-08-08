@@ -14,7 +14,9 @@ services, and their interfaces. No classes; components only.
   `ollama` (profile `leader`), `leader-baked` (profile `baked`), `game`
   (profile `game`). Only `advisor` is in the default set: it is the one
   service every game needs.
-- **Relationships**: `game` uses `advisor` by service name (one-way); the
+- **Relationships**: `game` uses `advisor` at the address `hima run` passes
+  it — the compose service name, or the container-to-host name when the
+  advisor is a host process (one-way); the
   leader is an OpenAI-compatible URL (`HIMA_LEADER_BASE_URL`), defaulting to
   the host's native Ollama through the container-to-host name. `webui` reads
   the host's `runs/` and `tmp/` bind mounts. `advisor` and `webui` build from
@@ -106,11 +108,12 @@ services, and their interfaces. No classes; components only.
   silent skip.
 - The three deployment choices are independent and share no vocabulary:
   `up --services` places the services, `run --game` places the game, and
-  `run --ui` selects the observation surface. A container game with host
-  services is invalid only because the game job needs the compose network,
-  which the manifest check states explicitly; the observation surface
-  constrains nothing, because both surfaces read the `runs/` and `tmp/`
-  trees that either game placement writes.
+  `run --ui` selects the observation surface. Every combination is valid:
+  a container game reaches a host advisor through `host.docker.internal`
+  and a containerized one by service name — `hima run` derives the address
+  from the manifest and passes it into the job — while both observation
+  surfaces read the `runs/` and `tmp/` trees that either game placement
+  writes.
 - `ollama` (profile `leader`) is an opt-in containerized engine for Linux
   hosts with NVIDIA GPUs: activate the profile and point
   `HIMA_LEADER_BASE_URL` at its published `${HIMA_OLLAMA_PORT:-11434}`. On
@@ -120,9 +123,14 @@ services, and their interfaces. No classes; components only.
   into the image; a compose-network game selects either by pointing
   `HIMA_LEADER_BASE_URL` at the service name.
 - `advisor` serves `GET /health`, ready only after model loading completes; the
-  host-side health precheck polls it.
+  host-side health precheck polls it. The `game` service declares no
+  `depends_on`: hima is the orchestrator and prechecks the advisor at its
+  recorded endpoint, so a compose dependency would both duplicate that
+  check and start a container the operator may have chosen not to run.
 - `game` carries no command flags in the compose file: its `environment`
-  block sets the container-context values (`HIMA_ADVISOR_HOST=advisor`;
+  block sets the container-context values (`HIMA_ADVISOR_HOST=advisor`,
+  the value for a hand-run compose job — `hima run` overrides it per
+  invocation with the address the manifest's advisor actually answers on;
   `HIMA_GAME=host`, because the game is already local once inside the
   container and the shipped default would otherwise make the in-container
   `hima run` dispatch back into compose; leader URL default
@@ -133,8 +141,8 @@ services, and their interfaces. No classes; components only.
   `hima_dht_game --advisor_host` (default `localhost`), consumed by the bot
   when building the inference URL, forwarded by `hima run --advisor-host`.
 - `hima run` wraps the one-shot `game` job at its default placement
-  `--game container`. It requires a manifest
-  recording the container placement, ensures the game image (built via the compose
+  `--game container`. It requires a manifest recording a reachable advisor
+  at either placement, ensures the game image (built via the compose
   `game` profile when absent; the build requires `SC2_LICENSE`), then runs
   the service with `--rm`. Game-semantic flags given on the host command line
   (difficulty, enemy race, seed, model, realtime) are forwarded as flags to
@@ -155,10 +163,10 @@ services, and their interfaces. No classes; components only.
 - An unreachable leader endpoint fails `up` naming both remediations: start
   an engine serving the URL (`ollama serve`) or point `HIMA_LEADER_BASE_URL`
   at a reachable provider.
-- A container game without a container-placement manifest fails naming the
-  remediation (`hima down && hima up --services container`); a missing game
-  image without `SC2_LICENSE` fails naming the variable and the license
-  acceptance it carries.
+- A container game without a manifest, or with a manifest whose advisor no
+  longer answers, fails naming `hima up`; a missing game image without
+  `SC2_LICENSE` fails naming the variable and the license acceptance it
+  carries.
 - `hima run --ui web` without a webui answering fails naming
   `hima up --webui`; the run does not start, because an observation the
   user asked for and cannot get is a failed request, not a downgrade.

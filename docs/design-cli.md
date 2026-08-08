@@ -159,7 +159,8 @@ lifecycle entries (`up`, `down`, `status`, `ensure_game_image`, `run_game`):
   answered by a process hima does not own, a failed `docker compose`
   invocation, a corrupt or version-mismatched manifest, a held service
   lock, an unreachable leader endpoint or unserved leader model, a
-  container game without a container-placement manifest, a host-topology
+  container game without a manifest or with an unreachable advisor, a
+  host-topology
   flag combined with `--game container`, `--ui web` without a running
   webui, a missing game image without `SC2_LICENSE`, a
   process surviving SIGKILL). `cli` catches it, prints

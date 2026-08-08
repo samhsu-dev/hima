@@ -138,10 +138,13 @@ compose services: `design-deployment.md`.
   `docker compose --profile game build game` with `SC2_LICENSE` passed
   through the build environment, logging that the first build downloads
   multiple GB. Errors: `CommandError` on a missing license or failed build.
-- **run_game(game_args) -> None** — Behavior: `docker compose --profile
-  game run --rm game`, appending the in-container command override
+- **run_game(game_args, advisor_host) -> None** — Behavior: `docker compose
+  --profile game run --rm -e HIMA_ADVISOR_HOST=<advisor_host> game`,
+  appending the in-container command override
   `hima run <game_args>` when `game_args` is non-empty (an empty list keeps
-  the compose-file command); streams output. The compose `game` service
+  the compose-file command); streams output. The advisor address is an
+  environment override, not a flag, so the in-container chain still
+  resolves flag > environment > .env > default. The compose `game` service
   pins `HIMA_GAME=host` in its environment: inside the container the game
   is already local, and without the pin the container-default value would
   make the in-container `hima run` dispatch back into compose

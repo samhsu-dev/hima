@@ -6,11 +6,12 @@ Workspace packaging of the COLM 2025 HIMA StarCraft II agent: game, advisor infe
 
 ## Install
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), [Ollama](https://ollama.com/),
-and retail StarCraft II 5.0.16 with the ladder map — game client setup in the
-[paper README](packages/hima-dht-game/README.md). Docker (via
-[OrbStack](https://orbstack.dev/) or Docker Desktop) is needed only for the
-headless run mode.
+Prerequisites: [uv](https://docs.astral.sh/uv/), an OpenAI-compatible leader
+endpoint ([Ollama](https://ollama.com/) locally, or any provider), and Docker
+(via [OrbStack](https://orbstack.dev/) or Docker Desktop) for the
+containerized game. Retail StarCraft II 5.0.16 with the ladder map is needed
+only to run the game on the host — client setup in the
+[paper README](packages/hima-dht-game/README.md).
 
 ```sh
 brew install ollama   # macOS: native Ollama uses the Metal GPU; container VMs cannot
@@ -21,70 +22,74 @@ uv sync
 
 ## Usage
 
-Native run (the retail macOS client renders the game on screen — for watching
-a game live):
-
 ```sh
-brew services start ollama  # leader: native Metal Ollama on 11434, you own it
-uv run hima up              # launch advisor + webui; verify the leader endpoint
-uv run hima run             # play one game, archive its outputs under runs/
-uv run hima metrics         # aggregate metric.json across runs/
-```
-
-Headless run (the game plays in a container with no display — for batch
-experiments; the leader is an endpoint you run yourself — on a Mac, the
-host's native Ollama, see "Run modes and the leader engine"):
-
-```sh
-uv run hima down                # free the ports held by the native services
-
-uv run hima up --backend docker # advisor + webui containers; verifies the leader endpoint
-uv run hima status              # every check ✓ before running
+brew services start ollama  # the leader endpoint is yours to run
+uv run hima up              # advisor as a host process; verify the leader endpoint
+uv run hima status          # every check ✓ before running
 
 # once per machine, in .env: SC2_LICENSE=iagreetotheeula accepts the
 # Blizzard AI and Machine Learning License; the first run then builds
 # the game image (multi-GB download)
-uv run hima run --headless      # one headless game, archived under runs/
-
-uv run hima metrics             # aggregate results
-open http://localhost:8123      # observation webui
+uv run hima run             # one game in a container, archived under runs/
+uv run hima metrics         # aggregate metric.json across runs/
 ```
 
-Restore the native steady state afterwards:
+To watch a game while it plays, start the observation server and ask a run to
+open it:
 
 ```sh
-uv run hima down && uv run hima up
+uv run hima up --webui      # adds the webui to the managed services
+uv run hima run --ui web    # opens the live page; fails fast if no webui is up
 ```
 
-## Run modes and the leader engine
+## Deployment axes
 
-- **Native**: everything runs as host processes. `hima up` spawns and owns
-  the advisor and the webui (pid files under `tmp/services/`); `hima run`
-  launches the retail macOS client, which renders the game. This is the
-  default and the fastest setup.
-- **Headless**: the game runs in a container as the SC2 4.10 Linux client
-  under qemu-user emulation — no display, suitable for unattended batch
-  experiments. It reaches the advisor as a compose service and the leader
-  through `host.docker.internal` ([design](docs/design-deployment.md)).
-- **Why the leader must be the host's native Ollama on a Mac**: macOS
-  container VMs (OrbStack, Docker Desktop) expose no Apple-GPU passthrough,
-  so a containerized Ollama runs CPU-only. Measured on an M4 Pro: native
-  Ollama answers a `qwen3:8b` leader completion in 29.5 s on Metal; the
-  containerized CPU engine never finishes inside the client's 600 s timeout.
-  Games are LLM-bound — the leader engine sets the experiment's wall clock.
-  The compose `ollama` service (opt-in profile `leader`) exists for Linux
-  hosts with NVIDIA GPUs.
-- **The leader engine is yours, on both backends**: `hima up` never starts,
-  stops, or pulls for it — it verifies that `HIMA_LEADER_BASE_URL` serves
-  `HIMA_LEADER_MODEL` and fails fast when it does not. Run the engine
-  however you like: `brew services start ollama`, the opt-in compose
-  `leader` profile, or any OpenAI-compatible provider.
+Three independent choices. No value of one constrains another — pick each on
+its own merits.
+
+| Choice | Option | Environment | Default |
+|--------|--------|-------------|---------|
+| Where the services run | `hima up --services host\|container` | `HIMA_SERVICES` | `host` |
+| Whether the webui exists | `hima up --webui` | `HIMA_WEBUI` | off |
+| Where the game runs | `hima run --game host\|container` | `HIMA_GAME` | `container` |
+| How you watch | `hima run --ui none\|web\|pygui` | `HIMA_UI` | `none` |
+
+- **Services**: `host` spawns the advisor (and the webui when selected) as
+  host processes that `hima` owns through pid files under `tmp/services/`;
+  `container` runs the same services under compose. On macOS the host
+  placement keeps the advisor on the Metal GPU.
+- **Game**: `container` runs the SC2 4.10 Linux client headless under
+  qemu-user emulation — no display, suitable for unattended batch
+  experiments, and the reference placement for comparable results. `host`
+  runs the retail macOS client, which renders the game on screen; its
+  results compare only with other retail runs, since the two clients differ
+  in version and balance. A container game reaches a host advisor through
+  `host.docker.internal`, so either service placement serves either game
+  placement.
+- **Watching is a separate question from where the game runs.** Both
+  surfaces read the `runs/` and `tmp/` trees, which a host game and a
+  container game write alike: `--ui web` opens the live browser page,
+  `--ui pygui` opens the pysc2 renderer on the archived replay after the
+  game. The retail client's own window is not one of these — it is the host
+  SC2 engine rendering itself.
+- **The leader engine is yours, always.** `hima up` never starts, stops, or
+  pulls for it: it verifies that `HIMA_LEADER_BASE_URL` serves
+  `HIMA_LEADER_MODEL` and fails fast when it does not. Run it however you
+  like — `brew services start ollama`, the opt-in compose `leader` profile,
+  or any OpenAI-compatible provider.
+- **Why the leader stays native on a Mac**: macOS container VMs (OrbStack,
+  Docker Desktop) expose no Apple-GPU passthrough, so a containerized Ollama
+  runs CPU-only. Measured on an M4 Pro: native Ollama answers a `qwen3:8b`
+  leader completion in 29.5 s on Metal; the containerized CPU engine never
+  finishes inside the client's 600 s timeout. Games are LLM-bound — the
+  leader engine sets the experiment's wall clock. The compose `ollama`
+  service (opt-in profile `leader`) exists for Linux hosts with NVIDIA GPUs.
 
 ## Configuration
 
 - Every setting resolves as CLI flag > exported environment > `.env` > code
   default. `.env` sits beside `docker-compose.yml` and is shared with compose
-  interpolation, so one file configures both backends. All `HIMA_*` keys and
+  interpolation, so one file configures every placement. All `HIMA_*` keys and
   their defaults are listed in [.env.example](.env.example).
 - The leader is endpoint-portable: `HIMA_LEADER_BASE_URL`,
   `HIMA_LEADER_MODEL`, and `HIMA_LEADER_API_KEY` point at any
