@@ -61,13 +61,11 @@ vendor documentation.
 - **[click]** `ctx.get_parameter_source("param")` on a `typer.Context`
   parameter — returns `ParameterSource.COMMANDLINE`, `.ENVIRONMENT`, or
   `.DEFAULT` (verified, click 8.4 via typer 0.27); distinguishes an explicit
-  flag from env/default values for headless flag forwarding. typer 0.27
+  flag from env/default values for container flag forwarding. typer 0.27
   vendors click as `typer._click` with no public re-export: import
   `ParameterSource` from `typer._click.core` — the standalone `click`
   distribution's enum is a different class, so identity checks against it
   always fail (verified via mypy comparison-overlap and at runtime).
-- **[ollama]** `OLLAMA_HOST=127.0.0.1:<port>` — environment consumed by both
-  `ollama serve` (bind address) and the `ollama pull` client (target server).
 
 ## Libraries
 
@@ -83,9 +81,10 @@ vendor documentation.
   precedence: CLI flag > exported environment > `.env` > code default.
 - Environment keys the entry point reads: `HIMA_ADVISOR_HOST`, `HIMA_ADVISOR_PORT`,
   `HIMA_WEBUI_HOST`, `HIMA_WEBUI_PORT`, `HIMA_LEADER_MODEL`, `HIMA_LEADER_BASE_URL`,
-  `HIMA_LEADER_API_KEY`, `HIMA_SERVICE_BACKEND`, `HIMA_OLLAMA_PORT`, and
-  `SC2_LICENSE` (`run --headless` only; no default, never persisted).
-- `docker compose` subprocesses run with `cwd=RUN_ROOT`; the docker backend
-  requires `docker-compose.yml` in the run root.
+  `HIMA_LEADER_API_KEY`, `HIMA_SERVICES`, `HIMA_WEBUI`, `HIMA_GAME`,
+  `HIMA_UI`, and `SC2_LICENSE` (`run --game container` only; no default,
+  never persisted).
+- `docker compose` subprocesses run with `cwd=RUN_ROOT`; the container
+  placement requires `docker-compose.yml` in the run root.
 - Core modules never read `os.environ`; env-backed values enter through typer
   `envvar` option declarations in `cli` only (`rules/code/constants.md`).
