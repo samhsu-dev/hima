@@ -63,10 +63,10 @@ class ServiceOptions:
 
 
 def up(options: ServiceOptions, skip_pull: bool, manifest_out: Path | None = None) -> None:
-    """Start the service trio on the selected backend and record the manifest."""
+    """Start the managed services on the selected backend and record the manifest."""
     with _mutual_exclusion():
         if options.backend is ServiceBackend.DOCKER:
-            manifest = _up_docker(options, skip_pull)
+            manifest = _up_docker(options)
         else:
             manifest = _up_native(options, skip_pull)
         write_manifest(manifest)
@@ -253,10 +253,11 @@ def _native_entries(
     }
 
 
-def _up_docker(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
+def _up_docker(options: ServiceOptions) -> ServiceManifest:
+    # The docker backend never provisions the leader engine; every leader
+    # URL is verified as an external endpoint (design-cli-services.md).
+    _verify_leader_endpoint(options)
     _docker.compose_up()
-    _verify_published_ollama_port(options.ollama_port)
-    _docker.ensure_leader_model(options.model, skip_pull, options.ollama_port)
     containers = _docker.container_names()
     endpoints = _endpoints(options)
     entries: dict[str, NativeService | DockerService] = {
@@ -264,19 +265,6 @@ def _up_docker(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
         for name, container in containers.items()
     }
     return _record(ServiceBackend.DOCKER, options, entries)
-
-
-def _verify_published_ollama_port(expected: int) -> None:
-    # Compose interpolation reads only exported env and .env, so an
-    # --ollama-port flag cannot reach docker-compose.yml; the published
-    # binding is the authoritative value.
-    published = _docker.published_ollama_port()
-    if published != expected:
-        raise CommandError(
-            f"compose published ollama on port {published}, not {expected}; the docker "
-            f"backend takes this port from HIMA_OLLAMA_PORT at compose interpolation — "
-            f"export it or set it in .env instead of passing --ollama-port"
-        )
 
 
 def _endpoints(options: ServiceOptions) -> dict[str, str]:

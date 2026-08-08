@@ -9,15 +9,12 @@ from typing import cast
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import RUN_ROOT
 
-from ._health import leader_model_present, ollama_url
-
 logger = logging.getLogger(__name__)
 
-# Launch set for the docker backend; order follows the native dependency order.
-COMPOSE_SERVICES = ("ollama", "advisor", "webui")
-
-# Container-side ollama port, fixed by docker-compose.yml.
-CONTAINER_OLLAMA_PORT = 11434
+# Managed launch set for the docker backend. The leader engine is never a
+# managed compose service; the `leader` profile is an operator opt-in
+# consumed via HIMA_LEADER_BASE_URL (design-deployment.md).
+COMPOSE_SERVICES = ("advisor", "webui")
 
 # Image tag of the containerized game, fixed by docker-compose.yml.
 GAME_IMAGE = "hima-game"
@@ -37,7 +34,7 @@ def game_image_present() -> bool:
 
 
 def compose_up() -> None:
-    """Start the service trio and block until compose healthchecks pass."""
+    """Start the managed services and block until compose healthchecks pass."""
     _run_compose(["up", "-d", "--wait", *COMPOSE_SERVICES])
 
 
@@ -46,7 +43,7 @@ def compose_stop() -> None:
 
 
 def container_names() -> dict[str, str]:
-    """Service name → container name for the running trio.
+    """Service name → container name for the managed services.
 
     Raises:
         CommandError: compose lists no container for one of the services.
@@ -59,38 +56,11 @@ def container_names() -> dict[str, str]:
     return names
 
 
-def published_ollama_port() -> int:
-    """Host port compose actually published for the ollama container.
-
-    Raises:
-        CommandError: compose reports no binding or an unparsable one.
-    """
-    output = _read_compose(["port", "ollama", str(CONTAINER_OLLAMA_PORT)]).strip()
-    try:
-        return int(output.rsplit(":", 1)[1])
-    except (IndexError, ValueError) as error:
-        raise CommandError(
-            f"cannot parse `docker compose port ollama {CONTAINER_OLLAMA_PORT}` output: {output!r}"
-        ) from error
-
-
 def _ps_rows(output: str) -> list[dict[str, str]]:
     # compose < v2.21 emits one JSON array; newer versions emit NDJSON.
     if output.lstrip().startswith("["):
         return cast(list[dict[str, str]], json.loads(output))
     return [json.loads(line) for line in output.splitlines() if line.strip()]
-
-
-def ensure_leader_model(model: str, skip_pull: bool, ollama_port: int) -> None:
-    """Ensure the model in the containerized Ollama store, pulling when absent."""
-    if leader_model_present(ollama_url(ollama_port), model):
-        logger.debug("leader model present: model=%s", model)
-        return
-    if skip_pull:
-        raise CommandError(
-            f"leader model {model} absent; run `docker compose exec ollama ollama pull {model}`"
-        )
-    _run_compose(["exec", "-T", "ollama", "ollama", "pull", model])
 
 
 def _run_compose(args: list[str]) -> None:

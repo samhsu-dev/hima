@@ -1,18 +1,22 @@
 # StarCraft II (retail 5.0.16) and the game loop stay on the host: the macOS
 # client cannot run in a Linux container, and macOS Docker has no Metal/MPS
 # passthrough. The host `hima run` reaches these services with its localhost
-# defaults. The leader default everywhere is the host's native Ollama
-# (`hima up`); the ollama/leader-baked services are compose-network
-# alternatives selected by setting HIMA_LEADER_BASE_URL in .env.
+# defaults. The leader is an endpoint contract, never a managed service:
+# `hima up` provisions the host's native Ollama or verifies
+# HIMA_LEADER_BASE_URL; the ollama/leader-baked services below are opt-in
+# profile alternatives selected by pointing HIMA_LEADER_BASE_URL at them.
 #
-# Containerized services — stock Ollama, model pulled once into a volume;
-# `hima up --backend docker` runs both steps and records the manifest:
-#   docker compose up -d --wait ollama advisor webui
-#   docker compose exec ollama ollama pull qwen3:8b
+# Default set — `hima up --backend docker` runs advisor + webui and records
+# the manifest:
+#   docker compose up -d --wait advisor webui
 #
-# Baked form — qwen3:8b inside the image, no per-device pull (offline-capable):
-#   docker compose --profile baked build leader-baked
-#   docker compose --profile baked up -d advisor leader-baked
+# Opt-in profiles:
+#   leader — stock Ollama for Linux/NVIDIA hosts; pull the model once into
+#            its volume: docker compose exec ollama ollama pull qwen3:8b
+#   baked  — qwen3:8b inside the image, no per-device pull (offline-capable):
+#            docker compose --profile baked build leader-baked
+#            docker compose --profile baked up -d advisor leader-baked
+#   game   — containerized SC2 4.10 game job (`hima run --headless`)
 
 # Pin the compose project name so every container, network, and volume
 # groups under "hima" regardless of the checkout directory name or -p flag
@@ -63,13 +67,14 @@ services:
       - ./tmp:/app/tmp:ro
 
   ollama:
+    # Opt-in containerized leader engine for Linux/NVIDIA hosts; `hima`
+    # never manages it — activate the profile and point HIMA_LEADER_BASE_URL
+    # at the published port (compose-network game: http://ollama:11434/v1).
+    profiles: ["leader"]
     image: ollama/ollama:0.32.5
-    # Published so the host reaches the containerized leader (`hima up
-    # --backend docker`). Backends are exclusive per port: `hima up` records
-    # ownership in tmp/services/manifest.toml, and a native server already
-    # holding the port fails this publish with an explicit bind error — move
-    # HIMA_OLLAMA_PORT to run both side by side. A compose-network game
-    # selects this service with HIMA_LEADER_BASE_URL=http://ollama:11434/v1.
+    # Published so the host reaches the containerized engine. A native
+    # `ollama serve` already holding the port fails this publish with an
+    # explicit bind error — move HIMA_OLLAMA_PORT to run both side by side.
     ports:
       - "${HIMA_OLLAMA_PORT:-11434}:11434"
     volumes:

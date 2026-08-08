@@ -9,11 +9,9 @@ Test cases:
   recorded in the manifest instead.
 - test_up_native_override_unreachable_raises: an unreachable overridden
   endpoint aborts `up` naming HIMA_LEADER_BASE_URL.
-- test_up_docker_records_container_manifest: the docker backend delegates
-  to compose and records container entries with host endpoints.
-- test_up_docker_published_port_divergence_raises: a compose-published
-  ollama port differing from the requested one aborts `up` and points
-  at HIMA_OLLAMA_PORT.
+- test_up_docker_records_container_manifest: the docker backend verifies
+  the leader endpoint, delegates advisor and webui to compose, and
+  records container entries with host endpoints.
 - test_up_manifest_out_writes_copy: --manifest-out writes the manifest to
   the default location and to the requested path.
 - test_down_docker_stops_compose_and_removes_manifest: a docker manifest
@@ -108,13 +106,18 @@ def test_up_native_override_unreachable_raises(monkeypatch: pytest.MonkeyPatch) 
 
 def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
     written: dict[str, services.ServiceManifest] = {}
+    queried: dict[str, tuple[str, str]] = {}
+
+    def fake_leader_models(base_url: str, api_key: str) -> list[str]:
+        queried["endpoint"] = (base_url, api_key)
+        return ["qwen3:8b"]
+
+    monkeypatch.setattr(_lifecycle, "leader_models", fake_leader_models)
     monkeypatch.setattr(_docker, "compose_up", lambda: None)
-    monkeypatch.setattr(_docker, "published_ollama_port", lambda: 11434)
-    monkeypatch.setattr(_docker, "ensure_leader_model", lambda model, skip_pull, ollama_port: None)
     monkeypatch.setattr(
         _docker,
         "container_names",
-        lambda: {"ollama": "hima-ollama-1", "advisor": "hima-advisor-1", "webui": "hima-webui-1"},
+        lambda: {"advisor": "hima-advisor-1", "webui": "hima-webui-1"},
     )
     monkeypatch.setattr(
         _lifecycle,
@@ -126,20 +129,14 @@ def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -
 
     manifest = written["manifest"]
     assert manifest.backend is services.ServiceBackend.DOCKER
+    assert queried["endpoint"] == ("http://localhost:11434/v1", "ollama")
     assert manifest.endpoints["leader"] == services.ModelEndpoint(
         url="http://localhost:11434/v1", model="qwen3:8b"
     )
+    assert set(manifest.services) == {"advisor", "webui"}
     assert manifest.services["advisor"] == services.DockerService(
         endpoint="http://localhost:8090", container="hima-advisor-1"
     )
-
-
-def test_up_docker_published_port_divergence_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_docker, "compose_up", lambda: None)
-    monkeypatch.setattr(_docker, "published_ollama_port", lambda: 12345)
-
-    with pytest.raises(CommandError, match="HIMA_OLLAMA_PORT"):
-        services.up(services.ServiceOptions(backend=services.ServiceBackend.DOCKER), skip_pull=True)
 
 
 def test_up_manifest_out_writes_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -195,13 +192,12 @@ def test_down_blocked_by_held_service_lock() -> None:
             services.down()
 
 
-def _docker_manifest(ollama_endpoint: str) -> services.ServiceManifest:
+def _docker_manifest(leader_url: str) -> services.ServiceManifest:
     return services.ServiceManifest(
         backend=services.ServiceBackend.DOCKER,
         created="2026-08-07T12:00:00+09:00",
-        endpoints={"leader": services.ModelEndpoint(url=f"{ollama_endpoint}/v1", model="qwen3:8b")},
+        endpoints={"leader": services.ModelEndpoint(url=leader_url, model="qwen3:8b")},
         services={
-            "ollama": services.DockerService(endpoint=ollama_endpoint, container="hima-ollama-1"),
             "advisor": services.DockerService(
                 endpoint="http://localhost:8090", container="hima-advisor-1"
             ),
@@ -224,7 +220,7 @@ def test_status_probes_manifest_endpoints(monkeypatch: pytest.MonkeyPatch) -> No
         queried.append((base_url, api_key))
         return ["qwen3:8b"]
 
-    manifest = _docker_manifest("http://localhost:12345")
+    manifest = _docker_manifest("http://localhost:12345/v1")
     monkeypatch.setattr(_lifecycle, "read_manifest", lambda: manifest)
     monkeypatch.setattr(_lifecycle, "healthy", fake_healthy)
     monkeypatch.setattr(_lifecycle, "leader_models", fake_leader_models)
@@ -232,7 +228,6 @@ def test_status_probes_manifest_endpoints(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert services.status(services.ServiceOptions()) is True
     assert probed == [
-        "http://localhost:12345/api/tags",
         "http://localhost:8090/health",
         "http://localhost:8080/api/games",
     ]
