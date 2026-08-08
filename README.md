@@ -25,28 +25,27 @@ Native run (the retail macOS client renders the game on screen — for watching
 a game live):
 
 ```sh
-uv run hima up        # launch advisor, Ollama, and the webui, wait until healthy
+uv run hima up        # launch advisor + webui; provision a local Ollama only when
+                      # the leader URL is the default, else verify the endpoint
 uv run hima run       # play one game, archive its outputs under runs/
 uv run hima metrics   # aggregate metric.json across runs/
 ```
 
 Headless run (the game plays in a container with no display — for batch
-experiments; the leader stays on the host's native Ollama, see
-"Run modes and the leader engine"):
+experiments; the leader is an endpoint you run yourself — on a Mac, the
+host's native Ollama, see "Run modes and the leader engine"):
 
 ```sh
-# once per machine: build the images; SC2_LICENSE accepts the Blizzard
-# AI and Machine Learning License at build time only, never stored
-SC2_LICENSE=iagreetotheeula docker compose --profile game build
-
-uv run hima down                # free the service ports held by native services
+uv run hima down                # free the ports held by the native services
 brew services start ollama      # leader: native Metal Ollama on 11434
 
-# compose trio; HIMA_OLLAMA_PORT moves the compose ollama beside the native server
-HIMA_OLLAMA_PORT=11435 uv run hima up --backend docker
+uv run hima up --backend docker # advisor + webui containers; verifies the leader endpoint
 uv run hima status              # every check ✓ before running
 
-docker compose --profile game run --rm game   # one headless game, archived under runs/
+# one headless game, archived under runs/; the first run builds the game
+# image (multi-GB download) — SC2_LICENSE accepts the Blizzard AI and
+# Machine Learning License at build time only, never stored
+SC2_LICENSE=iagreetotheeula uv run hima run --headless
 
 uv run hima metrics             # aggregate results
 open http://localhost:8123      # observation webui
@@ -74,10 +73,14 @@ uv run hima down && brew services stop ollama && uv run hima up
   Ollama answers a `qwen3:8b` leader completion in 29.5 s on Metal; the
   containerized CPU engine never finishes inside the client's 600 s timeout.
   Games are LLM-bound — the leader engine sets the experiment's wall clock.
-  The compose `ollama` service exists for Linux hosts with NVIDIA GPUs.
-- In the native flow, `hima up` manages Ollama itself; the headless flow uses
-  `brew services start ollama` instead because `hima down` has stopped the
-  hima-owned processes to free the service ports for the compose containers.
+  The compose `ollama` service (opt-in profile `leader`) exists for Linux
+  hosts with NVIDIA GPUs.
+- In the native flow, `hima up` provisions `ollama serve` itself when the
+  leader URL is the local default. With `--backend docker` it never
+  provisions the leader — it verifies the configured endpoint and fails
+  fast, so run the leader yourself (`brew services start ollama`, since
+  `hima down` has stopped the hima-owned one) or point
+  `HIMA_LEADER_BASE_URL` at any OpenAI-compatible server.
 
 ## Configuration
 
