@@ -25,6 +25,7 @@ from uvicorn.config import STARTUP_FAILURE
 from hima_dht_cli import experiment, services, viewer
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.metrics import report
+from hima_dht_cli.placement import Placement
 from hima_dht_cli.replay import play
 from hima_dht_cli.services import (
     DEFAULT_ADVISOR_HOST,
@@ -45,7 +46,11 @@ ENV_WEBUI_PORT = "HIMA_WEBUI_PORT"
 ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
 ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
 ENV_LEADER_API_KEY = "HIMA_LEADER_API_KEY"
-ENV_SERVICE_BACKEND = "HIMA_SERVICE_BACKEND"
+# One key per deployment axis; no value of one constrains another.
+ENV_SERVICES = "HIMA_SERVICES"
+ENV_WEBUI = "HIMA_WEBUI"
+ENV_GAME = "HIMA_GAME"
+ENV_UI = "HIMA_UI"
 # Also read by the game process (hima_dht_game.main), which inherits this
 # process's environment; the contract is documented in .env.example.
 ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
@@ -92,7 +97,10 @@ WebuiPortOption = Annotated[int, typer.Option(envvar=ENV_WEBUI_PORT)]
 LeaderModelOption = Annotated[str, typer.Option(envvar=ENV_LEADER_MODEL)]
 LeaderBaseUrlOption = Annotated[str, typer.Option(envvar=ENV_LEADER_BASE_URL)]
 LeaderApiKeyOption = Annotated[str, typer.Option(envvar=ENV_LEADER_API_KEY)]
-BackendOption = Annotated[services.ServiceBackend, typer.Option(envvar=ENV_SERVICE_BACKEND)]
+ServicesOption = Annotated[Placement, typer.Option("--services", envvar=ENV_SERVICES)]
+WebuiOption = Annotated[bool, typer.Option("--webui", envvar=ENV_WEBUI)]
+GameOption = Annotated[Placement, typer.Option("--game", envvar=ENV_GAME)]
+UiOption = Annotated[experiment.ObservationUI, typer.Option("--ui", envvar=ENV_UI)]
 
 
 def main() -> int:
@@ -111,7 +119,8 @@ def main() -> int:
 
 @app.command()
 def up(
-    backend: BackendOption = services.ServiceBackend.NATIVE,
+    placement: ServicesOption = Placement.HOST,
+    webui: WebuiOption = False,
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
@@ -122,7 +131,8 @@ def up(
     """Launch the managed services and verify the leader endpoint."""
     services.up(
         services.ServiceOptions(
-            backend=backend,
+            placement=placement,
+            webui=webui,
             advisor_port=port,
             webui_port=webui_port,
             model=model,
@@ -141,6 +151,8 @@ def down() -> None:
 
 @app.command()
 def status(
+    webui: WebuiOption = False,
+    game: GameOption = Placement.CONTAINER,
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
@@ -150,12 +162,14 @@ def status(
     """Report service and game state; exit 1 when a check fails."""
     ok = services.status(
         services.ServiceOptions(
+            webui=webui,
             advisor_port=port,
             webui_port=webui_port,
             model=model,
             leader_base_url=base_url,
             leader_api_key=api_key,
-        )
+        ),
+        game,
     )
     if not ok:
         raise typer.Exit(code=1)
@@ -173,10 +187,13 @@ def run(
     base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
     api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
     realtime: Annotated[bool, typer.Option("--realtime")] = False,
-    headless: Annotated[bool, typer.Option("--headless")] = False,
+    game: GameOption = Placement.CONTAINER,
+    ui: UiOption = experiment.ObservationUI.NONE,
+    webui_port: WebuiPortOption = server.DEFAULT_PORT,
     sc2_license: Annotated[str | None, typer.Option(envvar=ENV_SC2_LICENSE)] = None,
 ) -> None:
     """Play one game and archive its outputs under runs/."""
+    observation = experiment.ObservationOptions(ui=ui, webui_url=f"http://localhost:{webui_port}")
     options = experiment.RunOptions(
         difficulty=difficulty.value,
         enemy_race=enemy_race.value,
@@ -187,19 +204,21 @@ def run(
         base_url=base_url,
         api_key=api_key,
         realtime=realtime,
+        observation=observation,
     )
-    if headless:
+    if game is Placement.CONTAINER:
         _reject_host_flags(ctx)
-        experiment.run_headless(
-            experiment.HeadlessOptions(
-                game_args=_headless_args(ctx, options),
+        experiment.run_container(
+            experiment.ContainerRunOptions(
+                game_args=_container_args(ctx, options),
                 model=options.model,
                 api_key=options.api_key,
                 sc2_license=sc2_license,
+                observation=observation,
             )
         )
         return
-    experiment.run(options)
+    experiment.run_host(options)
 
 
 # Host-topology flags meaningless inside the game container, mapped to the
@@ -223,12 +242,12 @@ def _reject_host_flags(ctx: typer.Context) -> None:
     flags = ", ".join(f"--{param.replace('_', '-')}" for param, _ in explicit)
     keys = ", ".join(key for _, key in explicit)
     raise CommandError(
-        f"{flags} cannot combine with --headless — the game container resolves "
+        f"{flags} cannot combine with --game container — the game container resolves "
         f"these from its environment; set {keys} in .env or export them instead"
     )
 
 
-def _headless_args(ctx: typer.Context, options: experiment.RunOptions) -> list[str]:
+def _container_args(ctx: typer.Context, options: experiment.RunOptions) -> list[str]:
     # Only flags passed explicitly on the command line forward into the
     # container; environment- and default-sourced values resolve inside it,
     # keeping the precedence chain (flag > environment > .env > default).

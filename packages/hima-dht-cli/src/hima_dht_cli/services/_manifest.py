@@ -1,7 +1,6 @@
 """Service start manifest: what `hima up` started, read by `down`/`status`."""
 
 from dataclasses import asdict, dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -9,23 +8,17 @@ import tomli_w
 import tomllib
 
 from hima_dht_cli.errors import CommandError
+from hima_dht_cli.placement import Placement
 from hima_dht_cli.workspace import SERVICE_DIR
 
 MANIFEST_FILE = SERVICE_DIR / "manifest.toml"
 # Bumped when the TOML layout changes; readers reject every other version.
-MANIFEST_VERSION = 2
-
-
-class ServiceBackend(str, Enum):
-    """Where the managed services run."""
-
-    NATIVE = "native"
-    DOCKER = "docker"
+MANIFEST_VERSION = 3
 
 
 @dataclass(frozen=True)
-class NativeService:
-    """One natively spawned service as recorded in the manifest."""
+class HostService:
+    """One host-placed service as recorded in the manifest."""
 
     endpoint: str
     pid: int
@@ -34,7 +27,7 @@ class NativeService:
 
 
 @dataclass(frozen=True)
-class DockerService:
+class ContainerService:
     """One compose-managed service as recorded in the manifest."""
 
     endpoint: str
@@ -55,15 +48,16 @@ class ModelEndpoint:
 
 @dataclass(frozen=True)
 class ServiceManifest:
-    """Record of one successful `up`: backend, model endpoints, services.
+    """Record of one successful `up`: placement, endpoints, services.
 
-    `endpoints` is keyed by role; today the single role is `leader`.
+    `endpoints` is keyed by role; today the single role is `leader`. The
+    webui entry is absent from `services` when `up` did not start it.
     """
 
-    backend: ServiceBackend
+    placement: Placement
     created: str
     endpoints: dict[str, ModelEndpoint]
-    services: dict[str, NativeService | DockerService]
+    services: dict[str, HostService | ContainerService]
 
 
 def write_manifest(manifest: ServiceManifest, path: Path = MANIFEST_FILE) -> None:
@@ -71,7 +65,7 @@ def write_manifest(manifest: ServiceManifest, path: Path = MANIFEST_FILE) -> Non
     path.parent.mkdir(parents=True, exist_ok=True)
     document = {
         "version": MANIFEST_VERSION,
-        "backend": manifest.backend.value,
+        "placement": manifest.placement.value,
         "created": manifest.created,
         "endpoints": {role: asdict(endpoint) for role, endpoint in manifest.endpoints.items()},
         "services": {name: asdict(entry) for name, entry in manifest.services.items()},
@@ -102,15 +96,15 @@ def read_manifest(path: Path = MANIFEST_FILE) -> ServiceManifest | None:
             f"version {MANIFEST_VERSION} — delete the file and rerun `hima up`"
         )
     try:
-        backend = ServiceBackend(document["backend"])
+        placement = Placement(document["placement"])
         return ServiceManifest(
-            backend=backend,
+            placement=placement,
             created=document["created"],
             endpoints={
                 role: ModelEndpoint(**fields) for role, fields in document["endpoints"].items()
             },
             services={
-                name: _entry(backend, fields) for name, fields in document["services"].items()
+                name: _entry(placement, fields) for name, fields in document["services"].items()
             },
         )
     except (KeyError, TypeError, ValueError) as error:
@@ -125,13 +119,13 @@ def remove_manifest(path: Path = MANIFEST_FILE) -> None:
 def _corrupt_message(path: Path, error: Exception) -> str:
     return (
         f"corrupt service manifest {path}: {error!r} — delete the file and rerun "
-        f"`hima up`; `hima down` without a manifest still sweeps native pid files"
+        f"`hima up`; `hima down` without a manifest still sweeps host pid files"
     )
 
 
-def _entry(backend: ServiceBackend, fields: dict[str, Any]) -> NativeService | DockerService:
-    # The manifest-level backend discriminates the entry type; the dataclass
-    # constructor validates the field set (TypeError on mismatch).
-    if backend is ServiceBackend.DOCKER:
-        return DockerService(**fields)
-    return NativeService(**fields)
+def _entry(placement: Placement, fields: dict[str, Any]) -> HostService | ContainerService:
+    # The manifest-level placement discriminates the entry type; the
+    # dataclass constructor validates the field set (TypeError on mismatch).
+    if placement is Placement.CONTAINER:
+        return ContainerService(**fields)
+    return HostService(**fields)

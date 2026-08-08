@@ -6,14 +6,39 @@ import shutil
 import subprocess
 import sys
 import time
+import webbrowser
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
-from hima_dht_cli import services
+from hima_dht_cli import replay, services
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import GAME_OUTPUTS, RUN_ROOT, RUNS_DIR, TMP_DIR
 
 logger = logging.getLogger(__name__)
+
+
+class ObservationUI(str, Enum):
+    """How a human watches a run, independent of where the game runs."""
+
+    NONE = "none"
+    WEB = "web"
+    PYGUI = "pygui"
+
+
+class RunPhase(str, Enum):
+    """Point in a run at which a surface is asked to open."""
+
+    BEFORE = "before"
+    AFTER = "after"
+
+
+@dataclass(frozen=True)
+class ObservationOptions:
+    """The observation choice for one run, at either game placement."""
+
+    ui: ObservationUI = ObservationUI.NONE
+    webui_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -27,11 +52,12 @@ class RunOptions:
     base_url: str
     api_key: str
     realtime: bool
+    observation: ObservationOptions = ObservationOptions()
 
 
 @dataclass(frozen=True)
-class HeadlessOptions:
-    """One containerized game: forwarded flags and host-side precheck values.
+class ContainerRunOptions:
+    """One container game: forwarded flags and host-side precheck values.
 
     `game_args` holds only the game-semantic flags the user passed
     explicitly on the host command line; environment- and default-sourced
@@ -43,9 +69,10 @@ class HeadlessOptions:
     model: str
     api_key: str
     sc2_license: str | None
+    observation: ObservationOptions = ObservationOptions()
 
 
-def run(options: RunOptions) -> None:
+def run_host(options: RunOptions) -> None:
     # A game runs for hours and can die silently; the start record makes a
     # missing summary record diagnosable.
     logger.info(
@@ -68,48 +95,107 @@ def run(options: RunOptions) -> None:
         raise
     logger.info("run archived: run_dir=%s duration_s=%.0f", run_dir, time.monotonic() - started)
     _print_metric(run_dir)
+    open_surface(options.observation, RunPhase.AFTER, run_dir)
 
 
-def run_headless(options: HeadlessOptions) -> None:
-    """Run one containerized game against the docker service backend.
+def run_container(options: ContainerRunOptions) -> None:
+    """Run one containerized game, the default game placement.
 
     The in-container `hima run` performs its own prechecks, archives the
-    run, and prints the metric summary; output streams to this console.
+    run under the bind-mounted `runs/`, and prints the metric summary;
+    output streams to this console.
 
     Raises:
-        CommandError: no docker-backend manifest, an unreachable leader
-            endpoint or unserved model, a missing image without
-            SC2_LICENSE, a failed build, or a non-zero game exit.
+        CommandError: no manifest or an unreachable advisor, an
+            unreachable leader endpoint or unserved model, a missing image
+            without SC2_LICENSE, a failed build, or a non-zero game exit.
     """
-    manifest = _require_docker_manifest()
+    manifest = _require_manifest()
+    advisor_host = services.advisor_address(manifest.placement)
+    open_surface(options.observation, RunPhase.BEFORE, None)
+    _require_recorded_advisor(manifest)
     _require_recorded_leader(manifest, options)
     services.ensure_game_image(options.sc2_license)
-    services.run_game(options.game_args)
+    services.run_game(options.game_args, advisor_host)
+    open_surface(options.observation, RunPhase.AFTER, _newest_run_dir())
 
 
-def _require_docker_manifest() -> services.ServiceManifest:
-    manifest = services.read_manifest()
-    if manifest is None or manifest.backend is not services.ServiceBackend.DOCKER:
+def open_surface(options: ObservationOptions, phase: RunPhase, run_dir: Path | None) -> None:
+    """Open the requested observation surface when `phase` is its phase.
+
+    Raises:
+        CommandError: `WEB` finds no webui answering, or `PYGUI` finds no
+            replay in `run_dir`.
+    """
+    if options.ui is ObservationUI.WEB and phase is RunPhase.BEFORE:
+        _open_web(options.webui_url)
+    if options.ui is ObservationUI.PYGUI and phase is RunPhase.AFTER:
+        replay.play(_archived_replay(run_dir))
+
+
+def _open_web(webui_url: str) -> None:
+    # An observation the user asked for and cannot get is a failed
+    # request, not a downgrade: never fall back to running unwatched.
+    if not services.service_healthy(services.WEBUI, webui_url):
         raise CommandError(
-            "headless games run against the docker service backend — "
-            "run `hima down && hima up --backend docker` first"
+            f"--ui web needs an observation server at {webui_url}, which does not "
+            f"answer — run `hima up --webui` or check --webui-port / HIMA_WEBUI_PORT"
+        )
+    logger.info("observation surface opening: ui=web url=%s", webui_url)
+    webbrowser.open(webui_url)
+
+
+def _archived_replay(run_dir: Path | None) -> Path:
+    replays = sorted(run_dir.glob("*.SC2Replay")) if run_dir is not None else []
+    if not replays:
+        raise CommandError(
+            f"--ui pygui found no replay to open in {run_dir} — the game archived none"
+        )
+    return replays[0]
+
+
+def _newest_run_dir() -> Path | None:
+    archived = [path for path in RUNS_DIR.glob("*") if path.is_dir()]
+    if not archived:
+        return None
+    return max(archived, key=lambda path: path.stat().st_mtime)
+
+
+def _require_manifest() -> services.ServiceManifest:
+    manifest = services.read_manifest()
+    if manifest is None:
+        raise CommandError(
+            "a container game needs the advisor `hima up` recorded, and no manifest "
+            "exists — run `hima up` first"
         )
     return manifest
 
 
-def _require_recorded_leader(manifest: services.ServiceManifest, options: HeadlessOptions) -> None:
+def _require_recorded_advisor(manifest: services.ServiceManifest) -> None:
+    # The recorded endpoint is the host view; the job reaches the same
+    # server through the address `advisor_address` derives.
+    entry = manifest.services.get(services.ADVISOR)
+    if entry is None:
+        raise CommandError("no advisor recorded in the manifest — run `hima up`")
+    if not services.service_healthy(services.ADVISOR, entry.endpoint):
+        raise CommandError(
+            f"advisor server not healthy at {entry.endpoint} — run `hima down && hima up`"
+        )
+
+
+def _require_recorded_leader(
+    manifest: services.ServiceManifest, options: ContainerRunOptions
+) -> None:
     # The recorded URL is the host-view endpoint `up` verified; the game
     # container resolves its own HIMA_LEADER_BASE_URL at run time.
     endpoint = manifest.endpoints.get("leader")
     if endpoint is None:
-        raise CommandError(
-            "no leader endpoint recorded in the manifest — run `hima up --backend docker`"
-        )
+        raise CommandError("no leader endpoint recorded in the manifest — run `hima up`")
     served = services.leader_models(endpoint.url, options.api_key)
     if served is None:
         raise CommandError(
             f"leader endpoint not reachable at {endpoint.url} — "
-            "run `hima up --backend docker` or check HIMA_LEADER_BASE_URL"
+            "run `hima up` or check HIMA_LEADER_BASE_URL"
         )
     if not services.model_served(options.model, served):
         raise CommandError(
@@ -119,6 +205,7 @@ def _require_recorded_leader(manifest: services.ServiceManifest, options: Headle
 
 
 def _play_and_archive(options: RunOptions) -> Path:
+    open_surface(options.observation, RunPhase.BEFORE, None)
     _require_services(options)
     existing = set(TMP_DIR.glob("*.SC2Replay"))
     _invoke_game(options)

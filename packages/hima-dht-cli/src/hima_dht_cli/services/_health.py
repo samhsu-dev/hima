@@ -9,11 +9,16 @@ HEALTH_TIMEOUT_S = 2
 # Model listing parses a JSON body, slightly slower than a liveness probe.
 QUERY_TIMEOUT_S = 3
 
+# Managed service names: one vocabulary for the health table, the compose
+# service names, the manifest entries, and the launch specs.
+ADVISOR = "advisor"
+WEBUI = "webui"
+
 # Health probe path per managed service, fixed by each server's API.
 # Service specs and status checks build their probe URLs from this table.
 # The leader engine is not a managed service: it is checked through its
 # OpenAI-compatible model list instead (`leader_models`).
-HEALTH_PATHS = {"advisor": "/health", "webui": "/api/games"}
+HEALTH_PATHS = {ADVISOR: "/health", WEBUI: "/api/games"}
 
 
 def healthy(url: str) -> bool:
@@ -25,8 +30,13 @@ def healthy(url: str) -> bool:
         return False
 
 
+def service_healthy(name: str, endpoint: str) -> bool:
+    """True when the managed service answers on its own health path."""
+    return healthy(f"{endpoint}{HEALTH_PATHS[name]}")
+
+
 def advisor_health_url(host: str, port: int) -> str:
-    return f"http://{host}:{port}{HEALTH_PATHS['advisor']}"
+    return f"http://{host}:{port}{HEALTH_PATHS[ADVISOR]}"
 
 
 def advisor_healthy(host: str, port: int) -> bool:

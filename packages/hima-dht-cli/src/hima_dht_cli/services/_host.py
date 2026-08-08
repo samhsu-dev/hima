@@ -1,4 +1,4 @@
-"""Natively spawned services: specs, ownership, launch, health wait, stop."""
+"""Host-placed services: specs, ownership, launch, health wait, stop."""
 
 import logging
 import os
@@ -14,7 +14,7 @@ import psutil
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import RUN_ROOT, SERVICE_DIR
 
-from ._health import HEALTH_PATHS, advisor_health_url, healthy
+from ._health import ADVISOR, HEALTH_PATHS, WEBUI, advisor_health_url, healthy
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ LOG_ROTATE_BYTES = 10 * 1024 * 1024
 
 @dataclass(frozen=True)
 class ServiceSpec:
-    """One natively spawned background service.
+    """One host-placed background service.
 
     `process_keyword` guards `down`: a stored PID is killed only when its
     command line contains this keyword.
@@ -47,7 +47,7 @@ class ServiceSpec:
 
 def advisor_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
-        name="advisor",
+        name=ADVISOR,
         argv=[
             sys.executable,
             "-m",
@@ -68,7 +68,7 @@ def advisor_spec(port: int) -> ServiceSpec:
 
 def webui_spec(port: int) -> ServiceSpec:
     return ServiceSpec(
-        name="webui",
+        name=WEBUI,
         argv=[
             sys.executable,
             "-m",
@@ -80,7 +80,7 @@ def webui_spec(port: int) -> ServiceSpec:
             "--port",
             str(port),
         ],
-        health_url=f"http://127.0.0.1:{port}{HEALTH_PATHS['webui']}",
+        health_url=f"http://127.0.0.1:{port}{HEALTH_PATHS[WEBUI]}",
         pid_file=SERVICE_DIR / "webui.pid",
         log_file=SERVICE_DIR / "webui.log",
         process_keyword="uvicorn",
@@ -109,7 +109,7 @@ def ensure_service(spec: ServiceSpec) -> int:
             f"{spec.name}: {spec.health_url} is answered by a process hima did not start "
             f"(no live pid in {spec.pid_file}); stop the foreign server "
             f"(a compose container: `docker compose stop {spec.name}`) "
-            f"or run `hima up --backend docker`"
+            f"or run `hima up --services container`"
         )
     pid = launch(spec)
     wait_healthy(spec, pid)

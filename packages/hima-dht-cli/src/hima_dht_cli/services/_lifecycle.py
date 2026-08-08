@@ -1,4 +1,4 @@
-"""Service lifecycle orchestration: backend dispatch for up/down/status."""
+"""Service lifecycle orchestration: placement dispatch for up/down/status."""
 
 import fcntl
 import logging
@@ -11,17 +11,17 @@ from pathlib import Path
 import psutil
 
 from hima_dht_cli.errors import CommandError
+from hima_dht_cli.placement import Placement
 from hima_dht_cli.workspace import SC2_APP, SERVICE_DIR
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 
-from . import _docker, _native
-from ._health import HEALTH_PATHS, healthy, leader_models, model_served
+from . import _docker, _host
+from ._health import ADVISOR, WEBUI, leader_models, model_served, service_healthy
 from ._manifest import (
     MANIFEST_FILE,
-    DockerService,
+    ContainerService,
+    HostService,
     ModelEndpoint,
-    NativeService,
-    ServiceBackend,
     ServiceManifest,
     read_manifest,
     remove_manifest,
@@ -45,9 +45,10 @@ LOCK_FILE = SERVICE_DIR / "up-down.lock"
 
 @dataclass(frozen=True)
 class ServiceOptions:
-    """Backend, endpoint, and model selection for the managed services."""
+    """Placement, service set, endpoints, and model for the managed services."""
 
-    backend: ServiceBackend = ServiceBackend.NATIVE
+    placement: Placement = Placement.HOST
+    webui: bool = False
     advisor_port: int = DEFAULT_ADVISOR_PORT
     webui_port: int = DEFAULT_WEBUI_PORT
     model: str = DEFAULT_LEADER_MODEL
@@ -56,12 +57,12 @@ class ServiceOptions:
 
 
 def up(options: ServiceOptions, manifest_out: Path | None = None) -> None:
-    """Start the managed services on the selected backend and record the manifest."""
+    """Start the managed services at the selected placement and record the manifest."""
     with _mutual_exclusion():
-        if options.backend is ServiceBackend.DOCKER:
-            manifest = _up_docker(options)
+        if options.placement is Placement.CONTAINER:
+            manifest = _up_container(options)
         else:
-            manifest = _up_native(options)
+            manifest = _up_host(options)
         write_manifest(manifest)
         if manifest_out is not None:
             write_manifest(manifest, manifest_out)
@@ -72,17 +73,23 @@ def down() -> None:
     """Stop the services recorded by the last `up` and remove the manifest."""
     with _mutual_exclusion():
         manifest = read_manifest()
-        if manifest is not None and manifest.backend is ServiceBackend.DOCKER:
-            _docker.compose_stop()
+        if manifest is not None and manifest.placement is Placement.CONTAINER:
+            _docker.compose_stop(tuple(manifest.services))
         else:
-            if manifest is None:
-                logger.info("no service manifest: sweeping native pid files")
-            for spec in (
-                _native.webui_spec(DEFAULT_WEBUI_PORT),
-                _native.advisor_spec(DEFAULT_ADVISOR_PORT),
-            ):
-                _native.stop_one(spec)
+            _stop_host(manifest)
         remove_manifest()
+
+
+def _stop_host(manifest: ServiceManifest | None) -> None:
+    if manifest is None:
+        logger.info("no service manifest: sweeping host pid files")
+    # Reverse launch order, and every known service: a pid file left by an
+    # interrupted `up` is swept even when the manifest omits the service.
+    for spec in (
+        _host.webui_spec(DEFAULT_WEBUI_PORT),
+        _host.advisor_spec(DEFAULT_ADVISOR_PORT),
+    ):
+        _host.stop_one(spec)
 
 
 @contextmanager
@@ -100,8 +107,12 @@ def _mutual_exclusion() -> Iterator[None]:
         yield
 
 
-def status(options: ServiceOptions) -> bool:
+def status(options: ServiceOptions, game: Placement = Placement.CONTAINER) -> bool:
     """Print the manifest record and one line per check; True when all pass.
+
+    `game` is the placement the next `hima run` will use; the game runtime
+    check follows it, never the service placement — the two are
+    independent axes.
 
     Raises:
         CommandError: the recorded manifest is corrupt or has an
@@ -112,10 +123,10 @@ def status(options: ServiceOptions) -> bool:
         print("manifest: none (`hima up` has not recorded services)")
     else:
         print(
-            f"manifest: backend={manifest.backend.value} "
+            f"manifest: placement={manifest.placement.value} "
             f"created={manifest.created} ({MANIFEST_FILE})"
         )
-    checks = _collect_checks(options, manifest)
+    checks = _collect_checks(options, manifest, game)
     for name, ok, detail in checks:
         mark = "✓" if ok else "✗"
         print(f"{mark} {name}: {detail}")
@@ -123,27 +134,32 @@ def status(options: ServiceOptions) -> bool:
 
 
 def _collect_checks(
-    options: ServiceOptions, manifest: ServiceManifest | None
+    options: ServiceOptions, manifest: ServiceManifest | None, game: Placement
 ) -> list[tuple[str, bool, str]]:
     # The manifest is the source of truth for what `up` started; options
     # only fill in when no `up` has recorded services.
     if manifest is None:
-        return _option_checks(options)
+        return _option_checks(options, game)
     checks = [
         _service_check(name, entry.endpoint, entry) for name, entry in manifest.services.items()
     ]
     checks.append(_leader_check(manifest.endpoints.get("leader"), options.leader_api_key))
-    checks.append(_game_runtime_check(manifest.backend))
+    checks.append(_game_runtime_check(game))
     return checks
 
 
-def _option_checks(options: ServiceOptions) -> list[tuple[str, bool, str]]:
+def _option_checks(options: ServiceOptions, game: Placement) -> list[tuple[str, bool, str]]:
     endpoints = _endpoints(options)
-    checks = [_service_check(name, endpoints[name], None) for name in ("advisor", "webui")]
+    checks = [_service_check(name, endpoints[name], None) for name in _managed(options)]
     leader = ModelEndpoint(url=options.leader_base_url, model=options.model)
     checks.append(_leader_check(leader, options.leader_api_key))
-    checks.append(_game_runtime_check(ServiceBackend.NATIVE))
+    checks.append(_game_runtime_check(game))
     return checks
+
+
+def _managed(options: ServiceOptions) -> tuple[str, ...]:
+    """Names of the services this `up` manages, in launch order."""
+    return (ADVISOR, WEBUI) if options.webui else (ADVISOR,)
 
 
 def _leader_check(endpoint: ModelEndpoint | None, api_key: str) -> tuple[str, bool, str]:
@@ -157,39 +173,40 @@ def _leader_check(endpoint: ModelEndpoint | None, api_key: str) -> tuple[str, bo
     return ("leader", True, f"{endpoint.url} model={endpoint.model}")
 
 
-def _game_runtime_check(backend: ServiceBackend) -> tuple[str, bool, str]:
-    if backend is ServiceBackend.DOCKER:
+def _game_runtime_check(game: Placement) -> tuple[str, bool, str]:
+    if game is Placement.CONTAINER:
         present = _docker.game_image_present()
         detail = (
             _docker.GAME_IMAGE
             if present
-            else f"image {_docker.GAME_IMAGE} absent — `hima run --headless` builds it"
+            else f"image {_docker.GAME_IMAGE} absent — `hima run --game container` builds it"
         )
         return ("game image", present, detail)
     return ("StarCraft II", SC2_APP.exists(), str(SC2_APP))
 
 
 def _service_check(
-    name: str, endpoint: str, entry: NativeService | DockerService | None
+    name: str, endpoint: str, entry: HostService | ContainerService | None
 ) -> tuple[str, bool, str]:
-    health = f"{endpoint}{HEALTH_PATHS[name]}"
-    if isinstance(entry, NativeService):
-        return _native_check(name, health, entry)
-    if isinstance(entry, DockerService):
-        return (name, healthy(health), f"{health} container={entry.container}")
-    return (name, healthy(health), health)
+    reachable = service_healthy(name, endpoint)
+    if isinstance(entry, HostService):
+        return _host_check(name, endpoint, reachable, entry)
+    if isinstance(entry, ContainerService):
+        return (name, reachable, f"{endpoint} container={entry.container}")
+    return (name, reachable, endpoint)
 
 
-def _native_check(name: str, health: str, entry: NativeService) -> tuple[str, bool, str]:
+def _host_check(
+    name: str, endpoint: str, reachable: bool, entry: HostService
+) -> tuple[str, bool, str]:
     # A reachable endpoint with a dead recorded pid is a foreign process
     # shadowing the service, not a healthy service.
-    reachable = healthy(health)
     alive = psutil.pid_exists(entry.pid)
     if reachable and not alive:
-        detail = f"{health} answers but recorded pid {entry.pid} is gone (foreign process)"
+        detail = f"{endpoint} answers but recorded pid {entry.pid} is gone (foreign process)"
         return (name, False, detail)
     suffix = "" if alive else " (exited)"
-    return (name, reachable and alive, f"{health} pid={entry.pid}{suffix}")
+    return (name, reachable and alive, f"{endpoint} pid={entry.pid}{suffix}")
 
 
 def _verify_leader_endpoint(options: ServiceOptions) -> None:
@@ -208,24 +225,27 @@ def _verify_leader_endpoint(options: ServiceOptions) -> None:
         )
 
 
-def _up_native(options: ServiceOptions) -> ServiceManifest:
-    # The leader engine is operator-owned on every backend; hima verifies
+def _up_host(options: ServiceOptions) -> ServiceManifest:
+    # The leader engine is operator-owned at every placement; hima verifies
     # its endpoint and never spawns one (design-deployment.md).
     _verify_leader_endpoint(options)
-    specs = {
-        "advisor": _native.advisor_spec(options.advisor_port),
-        "webui": _native.webui_spec(options.webui_port),
-    }
-    pids = {name: _native.ensure_service(spec) for name, spec in specs.items()}
-    return _record(ServiceBackend.NATIVE, options, _native_entries(options, specs, pids))
+    specs = {name: _spec(name, options) for name in _managed(options)}
+    pids = {name: _host.ensure_service(spec) for name, spec in specs.items()}
+    return _record(Placement.HOST, options, _host_entries(options, specs, pids))
 
 
-def _native_entries(
-    options: ServiceOptions, specs: dict[str, _native.ServiceSpec], pids: dict[str, int]
-) -> dict[str, NativeService | DockerService]:
+def _spec(name: str, options: ServiceOptions) -> _host.ServiceSpec:
+    if name == WEBUI:
+        return _host.webui_spec(options.webui_port)
+    return _host.advisor_spec(options.advisor_port)
+
+
+def _host_entries(
+    options: ServiceOptions, specs: dict[str, _host.ServiceSpec], pids: dict[str, int]
+) -> dict[str, HostService | ContainerService]:
     endpoints = _endpoints(options)
     return {
-        name: NativeService(
+        name: HostService(
             endpoint=endpoints[name],
             pid=pids[name],
             pid_file=str(spec.pid_file),
@@ -235,34 +255,35 @@ def _native_entries(
     }
 
 
-def _up_docker(options: ServiceOptions) -> ServiceManifest:
-    # The docker backend never provisions the leader engine; every leader
-    # URL is verified as an external endpoint (design-cli-services.md).
+def _up_container(options: ServiceOptions) -> ServiceManifest:
+    # The container placement never provisions the leader engine; every
+    # leader URL is verified as an external endpoint (design-cli-services.md).
     _verify_leader_endpoint(options)
-    _docker.compose_up()
-    containers = _docker.container_names()
+    names = _managed(options)
+    _docker.compose_up(names)
+    containers = _docker.container_names(names)
     endpoints = _endpoints(options)
-    entries: dict[str, NativeService | DockerService] = {
-        name: DockerService(endpoint=endpoints[name], container=container)
+    entries: dict[str, HostService | ContainerService] = {
+        name: ContainerService(endpoint=endpoints[name], container=container)
         for name, container in containers.items()
     }
-    return _record(ServiceBackend.DOCKER, options, entries)
+    return _record(Placement.CONTAINER, options, entries)
 
 
 def _endpoints(options: ServiceOptions) -> dict[str, str]:
     return {
-        "advisor": f"http://localhost:{options.advisor_port}",
-        "webui": f"http://localhost:{options.webui_port}",
+        ADVISOR: f"http://localhost:{options.advisor_port}",
+        WEBUI: f"http://localhost:{options.webui_port}",
     }
 
 
 def _record(
-    backend: ServiceBackend,
+    placement: Placement,
     options: ServiceOptions,
-    entries: dict[str, NativeService | DockerService],
+    entries: dict[str, HostService | ContainerService],
 ) -> ServiceManifest:
     return ServiceManifest(
-        backend=backend,
+        placement=placement,
         created=datetime.now().astimezone().isoformat(timespec="seconds"),
         endpoints={"leader": ModelEndpoint(url=options.leader_base_url, model=options.model)},
         services=entries,
