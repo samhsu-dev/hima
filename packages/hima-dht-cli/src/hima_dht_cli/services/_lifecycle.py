@@ -15,7 +15,7 @@ from hima_dht_cli.workspace import SC2_APP, SERVICE_DIR
 from hima_dht_web.server import DEFAULT_PORT as DEFAULT_WEBUI_PORT
 
 from . import _docker, _native
-from ._health import HEALTH_PATHS, healthy, leader_models, model_served, ollama_url
+from ._health import HEALTH_PATHS, healthy, leader_models, model_served
 from ._manifest import (
     MANIFEST_FILE,
     DockerService,
@@ -31,22 +31,16 @@ from ._manifest import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_ADVISOR_PORT = 8090
-DEFAULT_OLLAMA_PORT = 11434
 DEFAULT_LEADER_MODEL = "qwen3:8b"
 # Ollama accepts any bearer token; a remote provider needs its real key.
 DEFAULT_LEADER_API_KEY = "ollama"
+# The OpenAI-compatible endpoint of a host Ollama on its own default port;
+# the engine is operator-owned, hima only verifies this URL.
+DEFAULT_LEADER_BASE_URL = "http://localhost:11434/v1"
 
 # Serializes `up` and `down`; two concurrent runs would race on pid
 # files and the manifest.
 LOCK_FILE = SERVICE_DIR / "up-down.lock"
-
-
-def _local_leader_url(ollama_port: int) -> str:
-    # The OpenAI-compatible base URL of a locally provisioned `ollama serve`.
-    return f"http://localhost:{ollama_port}/v1"
-
-
-DEFAULT_LEADER_BASE_URL = _local_leader_url(DEFAULT_OLLAMA_PORT)
 
 
 @dataclass(frozen=True)
@@ -56,19 +50,18 @@ class ServiceOptions:
     backend: ServiceBackend = ServiceBackend.NATIVE
     advisor_port: int = DEFAULT_ADVISOR_PORT
     webui_port: int = DEFAULT_WEBUI_PORT
-    ollama_port: int = DEFAULT_OLLAMA_PORT
     model: str = DEFAULT_LEADER_MODEL
     leader_base_url: str = DEFAULT_LEADER_BASE_URL
     leader_api_key: str = DEFAULT_LEADER_API_KEY
 
 
-def up(options: ServiceOptions, skip_pull: bool, manifest_out: Path | None = None) -> None:
+def up(options: ServiceOptions, manifest_out: Path | None = None) -> None:
     """Start the managed services on the selected backend and record the manifest."""
     with _mutual_exclusion():
         if options.backend is ServiceBackend.DOCKER:
             manifest = _up_docker(options)
         else:
-            manifest = _up_native(options, skip_pull)
+            manifest = _up_native(options)
         write_manifest(manifest)
         if manifest_out is not None:
             write_manifest(manifest, manifest_out)
@@ -87,7 +80,6 @@ def down() -> None:
             for spec in (
                 _native.webui_spec(DEFAULT_WEBUI_PORT),
                 _native.advisor_spec(DEFAULT_ADVISOR_PORT),
-                _native.ollama_spec(DEFAULT_OLLAMA_PORT),
             ):
                 _native.stop_one(spec)
         remove_manifest()
@@ -200,41 +192,31 @@ def _native_check(name: str, health: str, entry: NativeService) -> tuple[str, bo
     return (name, reachable and alive, f"{health} pid={entry.pid}{suffix}")
 
 
-def _provisions_leader(options: ServiceOptions) -> bool:
-    # Textual comparison is the contract: any override — even an equivalent
-    # spelling of the local default — selects verify-only against an
-    # external endpoint instead of provisioning `ollama serve`.
-    return options.leader_base_url == _local_leader_url(options.ollama_port)
-
-
 def _verify_leader_endpoint(options: ServiceOptions) -> None:
     served = leader_models(options.leader_base_url, options.leader_api_key)
     if served is None:
         raise CommandError(
             f"leader endpoint not reachable at {options.leader_base_url} — start an "
-            f"OpenAI-compatible server there (e.g. `ollama serve`) or point "
-            f"HIMA_LEADER_BASE_URL at your provider"
+            f"OpenAI-compatible server there (e.g. `brew services start ollama`) or "
+            f"point HIMA_LEADER_BASE_URL at your provider"
         )
     if not model_served(options.model, served):
         raise CommandError(
             f"leader model {options.model} not served at {options.leader_base_url} — "
-            f"pull it there or check --model / HIMA_LEADER_MODEL"
+            f"pull it there (`ollama pull {options.model}`) or check "
+            f"--model / HIMA_LEADER_MODEL"
         )
 
 
-def _up_native(options: ServiceOptions, skip_pull: bool) -> ServiceManifest:
-    specs: dict[str, _native.ServiceSpec] = {}
-    pids: dict[str, int] = {}
-    if _provisions_leader(options):
-        specs["ollama"] = _native.ollama_spec(options.ollama_port)
-        pids["ollama"] = _native.ensure_service(specs["ollama"])
-        _native.ensure_leader_model(options.model, skip_pull, options.ollama_port)
-    else:
-        _verify_leader_endpoint(options)
-    specs["advisor"] = _native.advisor_spec(options.advisor_port)
-    specs["webui"] = _native.webui_spec(options.webui_port)
-    pids["advisor"] = _native.ensure_service(specs["advisor"])
-    pids["webui"] = _native.ensure_service(specs["webui"])
+def _up_native(options: ServiceOptions) -> ServiceManifest:
+    # The leader engine is operator-owned on every backend; hima verifies
+    # its endpoint and never spawns one (design-deployment.md).
+    _verify_leader_endpoint(options)
+    specs = {
+        "advisor": _native.advisor_spec(options.advisor_port),
+        "webui": _native.webui_spec(options.webui_port),
+    }
+    pids = {name: _native.ensure_service(spec) for name, spec in specs.items()}
     return _record(ServiceBackend.NATIVE, options, _native_entries(options, specs, pids))
 
 
@@ -269,7 +251,6 @@ def _up_docker(options: ServiceOptions) -> ServiceManifest:
 
 def _endpoints(options: ServiceOptions) -> dict[str, str]:
     return {
-        "ollama": ollama_url(options.ollama_port),
         "advisor": f"http://localhost:{options.advisor_port}",
         "webui": f"http://localhost:{options.webui_port}",
     }

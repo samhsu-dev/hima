@@ -52,7 +52,7 @@ def test_up_defaults_read_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_LEADER_MODEL", "qwen3:32b")
     captured: dict[str, services.ServiceOptions] = {}
     monkeypatch.setattr(
-        services, "up", lambda options, skip_pull, manifest_out: captured.update(options=options)
+        services, "up", lambda options, manifest_out: captured.update(options=options)
     )
 
     result = runner.invoke(cli.app, ["up"])
@@ -67,7 +67,7 @@ def test_up_backend_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_SERVICE_BACKEND", "docker")
     captured: dict[str, services.ServiceOptions] = {}
     monkeypatch.setattr(
-        services, "up", lambda options, skip_pull, manifest_out: captured.update(options=options)
+        services, "up", lambda options, manifest_out: captured.update(options=options)
     )
 
     result = runner.invoke(cli.app, ["up"])
@@ -81,7 +81,7 @@ def test_up_leader_endpoint_reads_environment(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("HIMA_LEADER_API_KEY", "secret")
     captured: dict[str, services.ServiceOptions] = {}
     monkeypatch.setattr(
-        services, "up", lambda options, skip_pull, manifest_out: captured.update(options=options)
+        services, "up", lambda options, manifest_out: captured.update(options=options)
     )
 
     result = runner.invoke(cli.app, ["up"])
@@ -97,7 +97,7 @@ def test_flag_overrides_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HIMA_ADVISOR_PORT", "9001")
     captured: dict[str, services.ServiceOptions] = {}
     monkeypatch.setattr(
-        services, "up", lambda options, skip_pull, manifest_out: captured.update(options=options)
+        services, "up", lambda options, manifest_out: captured.update(options=options)
     )
 
     result = runner.invoke(cli.app, ["up", "--port", "7000"])

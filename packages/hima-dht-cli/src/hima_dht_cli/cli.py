@@ -46,7 +46,6 @@ ENV_LEADER_MODEL = "HIMA_LEADER_MODEL"
 ENV_LEADER_BASE_URL = "HIMA_LEADER_BASE_URL"
 ENV_LEADER_API_KEY = "HIMA_LEADER_API_KEY"
 ENV_SERVICE_BACKEND = "HIMA_SERVICE_BACKEND"
-ENV_OLLAMA_PORT = "HIMA_OLLAMA_PORT"
 # Also read by the game process (hima_dht_game.main), which inherits this
 # process's environment; the contract is documented in .env.example.
 ENV_LOG_LEVEL = "HIMA_LOG_LEVEL"
@@ -94,7 +93,6 @@ LeaderModelOption = Annotated[str, typer.Option(envvar=ENV_LEADER_MODEL)]
 LeaderBaseUrlOption = Annotated[str, typer.Option(envvar=ENV_LEADER_BASE_URL)]
 LeaderApiKeyOption = Annotated[str, typer.Option(envvar=ENV_LEADER_API_KEY)]
 BackendOption = Annotated[services.ServiceBackend, typer.Option(envvar=ENV_SERVICE_BACKEND)]
-OllamaPortOption = Annotated[int, typer.Option(envvar=ENV_OLLAMA_PORT)]
 
 
 def main() -> int:
@@ -116,25 +114,21 @@ def up(
     backend: BackendOption = services.ServiceBackend.NATIVE,
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
-    ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
     base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
     api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
-    skip_pull: Annotated[bool, typer.Option("--skip-pull")] = False,
     manifest_out: Annotated[Path | None, typer.Option("--manifest-out")] = None,
 ) -> None:
-    """Launch the managed services and verify or provision the leader."""
+    """Launch the managed services and verify the leader endpoint."""
     services.up(
         services.ServiceOptions(
             backend=backend,
             advisor_port=port,
             webui_port=webui_port,
-            ollama_port=ollama_port,
             model=model,
             leader_base_url=base_url,
             leader_api_key=api_key,
         ),
-        skip_pull,
         manifest_out,
     )
 
@@ -149,7 +143,6 @@ def down() -> None:
 def status(
     port: AdvisorPortOption = DEFAULT_ADVISOR_PORT,
     webui_port: WebuiPortOption = server.DEFAULT_PORT,
-    ollama_port: OllamaPortOption = services.DEFAULT_OLLAMA_PORT,
     model: LeaderModelOption = DEFAULT_LEADER_MODEL,
     base_url: LeaderBaseUrlOption = DEFAULT_LEADER_BASE_URL,
     api_key: LeaderApiKeyOption = DEFAULT_LEADER_API_KEY,
@@ -159,7 +152,6 @@ def status(
         services.ServiceOptions(
             advisor_port=port,
             webui_port=webui_port,
-            ollama_port=ollama_port,
             model=model,
             leader_base_url=base_url,
             leader_api_key=api_key,

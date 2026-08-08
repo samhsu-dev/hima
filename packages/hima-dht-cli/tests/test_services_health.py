@@ -3,8 +3,8 @@
 Test cases:
 - test_healthy_rejects_error_status: an error status (e.g. a foreign
   server's 404) does not count as healthy.
-- test_leader_model_present_malformed_body_false: a 200 whose body is
-  not an Ollama tag list reports the model as absent.
+- test_leader_models_malformed_body_none: a 200 whose body is not an
+  OpenAI-compatible model list yields None, not a partial list.
 - test_leader_models_lists_openai_endpoint: the endpoint check GETs
   {base_url}/models with the bearer key and returns the served ids.
 - test_leader_models_none_when_unreachable: a request failure yields None,
@@ -32,20 +32,20 @@ def test_healthy_rejects_error_status(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _health.healthy("http://localhost:8090/health") is False
 
 
-def test_leader_model_present_malformed_body_false(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_leader_models_malformed_body_none(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeResponse:
         def raise_for_status(self) -> None:
             pass
 
         def json(self) -> list[str]:
-            return ["not", "a", "tag-list"]
+            return ["not", "a", "model-list"]
 
-    def fake_get(url: str, timeout: int) -> FakeResponse:
+    def fake_get(url: str, headers: dict[str, str], timeout: int) -> FakeResponse:
         return FakeResponse()
 
     monkeypatch.setattr("hima_dht_cli.services._health.requests.get", fake_get)
 
-    assert _health.leader_model_present("http://localhost:11434", "qwen3:8b") is False
+    assert _health.leader_models("http://localhost:11434/v1", "ollama") is None
 
 
 def test_leader_models_lists_openai_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:

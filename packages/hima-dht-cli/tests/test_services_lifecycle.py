@@ -1,14 +1,13 @@
 """Unit tests for hima_dht_cli.services._lifecycle (up/down/status dispatch).
 
 Test cases:
-- test_up_native_ensures_services_in_dependency_order: the default leader
-  base URL provisions ollama, the leader model, the advisor, then the
-  webui, and records a native manifest.
-- test_up_native_override_skips_provisioning_and_verifies: an overridden
-  leader base URL provisions no ollama; the endpoint is verified and
-  recorded in the manifest instead.
-- test_up_native_override_unreachable_raises: an unreachable overridden
-  endpoint aborts `up` naming HIMA_LEADER_BASE_URL.
+- test_up_native_verifies_leader_then_starts_services: `up` verifies the
+  leader endpoint, starts only the advisor and the webui, and records the
+  verified endpoint in a native manifest.
+- test_up_native_unreachable_leader_raises: an unreachable leader endpoint
+  aborts `up` naming HIMA_LEADER_BASE_URL, before any service starts.
+- test_up_native_unserved_model_raises: a reachable endpoint not serving
+  the requested model aborts `up` naming the model.
 - test_up_docker_records_container_manifest: the docker backend verifies
   the leader endpoint, delegates advisor and webui to compose, and
   records container entries with host endpoints.
@@ -17,7 +16,7 @@ Test cases:
 - test_down_docker_stops_compose_and_removes_manifest: a docker manifest
   routes `down` to compose stop and removes the manifest.
 - test_down_without_manifest_sweeps_native_in_reverse_order: no manifest
-  sweeps webui, advisor, then ollama pid files.
+  sweeps the webui then the advisor pid file.
 - test_down_blocked_by_held_service_lock: a held service lock makes
   `down` raise instead of racing the holder.
 - test_status_probes_manifest_endpoints: status probes every recorded
@@ -38,35 +37,7 @@ from hima_dht_cli.errors import CommandError
 from hima_dht_cli.services import _docker, _lifecycle, _native
 
 
-def test_up_native_ensures_services_in_dependency_order(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    order: list[str] = []
-    written: dict[str, services.ServiceManifest] = {}
-
-    def fake_ensure_service(spec: services.ServiceSpec) -> int:
-        order.append(spec.name)
-        return 4321
-
-    monkeypatch.setattr(_native, "ensure_service", fake_ensure_service)
-    monkeypatch.setattr(
-        _native,
-        "ensure_leader_model",
-        lambda model, skip_pull, ollama_port: order.append("leader-model"),
-    )
-    monkeypatch.setattr(
-        _lifecycle,
-        "write_manifest",
-        lambda manifest, path=None: written.update(manifest=manifest),
-    )
-
-    services.up(services.ServiceOptions(), skip_pull=True)
-
-    assert order == ["ollama", "leader-model", "advisor", "webui"]
-    assert written["manifest"].backend is services.ServiceBackend.NATIVE
-
-
-def test_up_native_override_skips_provisioning_and_verifies(
+def test_up_native_verifies_leader_then_starts_services(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     order: list[str] = []
@@ -77,31 +48,43 @@ def test_up_native_override_skips_provisioning_and_verifies(
         queried["endpoint"] = (base_url, api_key)
         return ["qwen3:8b"]
 
-    monkeypatch.setattr(_native, "ensure_service", lambda spec: order.append(spec.name) or 4321)
+    def fake_ensure_service(spec: services.ServiceSpec) -> int:
+        order.append(spec.name)
+        return 4321
+
+    monkeypatch.setattr(_native, "ensure_service", fake_ensure_service)
     monkeypatch.setattr(_lifecycle, "leader_models", fake_leader_models)
     monkeypatch.setattr(
         _lifecycle,
         "write_manifest",
         lambda manifest, path=None: written.update(manifest=manifest),
     )
-    options = services.ServiceOptions(leader_base_url="http://127.0.0.1:11434/v1")
 
-    services.up(options, skip_pull=True)
+    services.up(services.ServiceOptions())
 
     assert order == ["advisor", "webui"]
-    assert queried["endpoint"] == ("http://127.0.0.1:11434/v1", "ollama")
+    assert queried["endpoint"] == ("http://localhost:11434/v1", "ollama")
+    assert written["manifest"].backend is services.ServiceBackend.NATIVE
     assert written["manifest"].endpoints["leader"] == services.ModelEndpoint(
-        url="http://127.0.0.1:11434/v1", model="qwen3:8b"
+        url="http://localhost:11434/v1", model="qwen3:8b"
     )
 
 
-def test_up_native_override_unreachable_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_up_native_unreachable_leader_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_lifecycle, "leader_models", lambda base_url, api_key: None)
+    monkeypatch.setattr(
+        _native, "ensure_service", lambda spec: pytest.fail("no service starts before verification")
+    )
 
     with pytest.raises(CommandError, match="HIMA_LEADER_BASE_URL"):
-        services.up(
-            services.ServiceOptions(leader_base_url="https://api.example.com/v1"), skip_pull=True
-        )
+        services.up(services.ServiceOptions(leader_base_url="https://api.example.com/v1"))
+
+
+def test_up_native_unserved_model_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_lifecycle, "leader_models", lambda base_url, api_key: ["llama3:8b"])
+
+    with pytest.raises(CommandError, match="qwen3:8b"):
+        services.up(services.ServiceOptions())
 
 
 def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -125,7 +108,7 @@ def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -
         lambda manifest, path=None: written.update(manifest=manifest),
     )
 
-    services.up(services.ServiceOptions(backend=services.ServiceBackend.DOCKER), skip_pull=True)
+    services.up(services.ServiceOptions(backend=services.ServiceBackend.DOCKER))
 
     manifest = written["manifest"]
     assert manifest.backend is services.ServiceBackend.DOCKER
@@ -142,14 +125,14 @@ def test_up_docker_records_container_manifest(monkeypatch: pytest.MonkeyPatch) -
 def test_up_manifest_out_writes_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     manifest = SimpleNamespace(backend=services.ServiceBackend.NATIVE)
     paths: list[Path] = []
-    monkeypatch.setattr(_lifecycle, "_up_native", lambda options, skip_pull: manifest)
+    monkeypatch.setattr(_lifecycle, "_up_native", lambda options: manifest)
     monkeypatch.setattr(
         _lifecycle,
         "write_manifest",
         lambda manifest, path=services.MANIFEST_FILE: paths.append(path),
     )
 
-    services.up(services.ServiceOptions(), skip_pull=True, manifest_out=tmp_path / "m.toml")
+    services.up(services.ServiceOptions(), manifest_out=tmp_path / "m.toml")
 
     assert paths == [services.MANIFEST_FILE, tmp_path / "m.toml"]
 
@@ -178,7 +161,7 @@ def test_down_without_manifest_sweeps_native_in_reverse_order(
 
     services.down()
 
-    assert stopped == ["webui", "advisor", "ollama"]
+    assert stopped == ["webui", "advisor"]
 
 
 def test_down_blocked_by_held_service_lock() -> None:
@@ -247,11 +230,11 @@ def test_status_flags_foreign_endpoint_with_dead_pid(
             "leader": services.ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")
         },
         services={
-            "ollama": services.NativeService(
-                endpoint="http://localhost:11434",
+            "advisor": services.NativeService(
+                endpoint="http://localhost:8090",
                 pid=4_194_304,
-                pid_file="tmp/services/ollama.pid",
-                log_file="tmp/services/ollama.log",
+                pid_file="tmp/services/advisor.pid",
+                log_file="tmp/services/advisor.log",
             )
         },
     )

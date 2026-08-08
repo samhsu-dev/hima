@@ -37,11 +37,11 @@ def test_native_manifest_round_trips(tmp_path: Path) -> None:
         created="2026-08-07T12:00:00+09:00",
         endpoints={"leader": ModelEndpoint(url="http://localhost:11434/v1", model="qwen3:8b")},
         services={
-            "ollama": NativeService(
-                endpoint="http://localhost:11434",
+            "advisor": NativeService(
+                endpoint="http://localhost:8090",
                 pid=4321,
-                pid_file="tmp/services/ollama.pid",
-                log_file="tmp/services/ollama.log",
+                pid_file="tmp/services/advisor.pid",
+                log_file="tmp/services/advisor.log",
             )
         },
     )

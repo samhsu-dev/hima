@@ -6,8 +6,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import psutil
@@ -15,7 +14,7 @@ import psutil
 from hima_dht_cli.errors import CommandError
 from hima_dht_cli.workspace import RUN_ROOT, SERVICE_DIR
 
-from ._health import HEALTH_PATHS, advisor_health_url, healthy, leader_model_present, ollama_url
+from ._health import HEALTH_PATHS, advisor_health_url, healthy
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +34,7 @@ class ServiceSpec:
     """One natively spawned background service.
 
     `process_keyword` guards `down`: a stored PID is killed only when its
-    command line contains this keyword. `env` is extra spawn environment
-    merged over the inherited one.
+    command line contains this keyword.
     """
 
     name: str
@@ -45,7 +43,6 @@ class ServiceSpec:
     pid_file: Path
     log_file: Path
     process_keyword: str
-    env: Mapping[str, str] = field(default_factory=dict)
 
 
 def advisor_spec(port: int) -> ServiceSpec:
@@ -87,18 +84,6 @@ def webui_spec(port: int) -> ServiceSpec:
         pid_file=SERVICE_DIR / "webui.pid",
         log_file=SERVICE_DIR / "webui.log",
         process_keyword="uvicorn",
-    )
-
-
-def ollama_spec(port: int) -> ServiceSpec:
-    return ServiceSpec(
-        name="ollama",
-        argv=["ollama", "serve"],
-        health_url=f"{ollama_url(port)}{HEALTH_PATHS['ollama']}",
-        pid_file=SERVICE_DIR / "ollama.pid",
-        log_file=SERVICE_DIR / "ollama.log",
-        process_keyword="ollama",
-        env=_ollama_env(port),
     )
 
 
@@ -153,7 +138,6 @@ def launch(spec: ServiceSpec) -> int:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
-                env={**os.environ, **spec.env} if spec.env else None,
             )
     except FileNotFoundError as error:
         raise CommandError(f"{spec.name}: executable not found: {spec.argv[0]}") from error
@@ -189,29 +173,6 @@ def wait_healthy(spec: ServiceSpec, pid: int) -> None:
         f"{spec.name}: no health response after {HEALTH_ATTEMPTS} checks; "
         f"the process keeps running — inspect {spec.log_file} and re-check with `hima status`"
     )
-
-
-def ensure_leader_model(model: str, skip_pull: bool, ollama_port: int) -> None:
-    """Ensure the model in the native Ollama store, pulling when absent."""
-    if leader_model_present(ollama_url(ollama_port), model):
-        logger.debug("leader model present: model=%s", model)
-        return
-    if skip_pull:
-        raise CommandError(f"leader model {model} absent; run `ollama pull {model}`")
-    # Start record at INFO: the pull downloads gigabytes and can stall.
-    logger.info("leader model pull starting: model=%s", model)
-    started = time.monotonic()
-    completed = subprocess.run(
-        ["ollama", "pull", model], env={**os.environ, **_ollama_env(ollama_port)}
-    )
-    logger.info(
-        "leader model pull exited: model=%s exit_code=%d duration_s=%.0f",
-        model,
-        completed.returncode,
-        time.monotonic() - started,
-    )
-    if completed.returncode != 0:
-        raise CommandError(f"ollama pull {model} failed with code {completed.returncode}")
 
 
 def stop_one(spec: ServiceSpec) -> None:
@@ -287,7 +248,7 @@ def _log_tail(log_file: Path) -> str:
 
 
 def _terminate_group(spec: ServiceSpec, process: psutil.Process) -> None:
-    # Signal the whole group: ollama serve keeps model-runner children.
+    # Signal the whole group: a uvicorn server keeps worker children.
     _signal_group(process.pid, signal.SIGTERM)
     try:
         process.wait(timeout=STOP_WAIT_S)
@@ -314,9 +275,3 @@ def _signal_group(pid: int, signum: int) -> None:
         os.killpg(pid, signum)
     except ProcessLookupError:
         logger.debug("signal skipped, group gone: pid=%d signal=%d", pid, signum)
-
-
-def _ollama_env(port: int) -> dict[str, str]:
-    # OLLAMA_HOST is read by both `ollama serve` (bind address) and the
-    # `ollama pull` client (target server).
-    return {"OLLAMA_HOST": f"127.0.0.1:{port}"}

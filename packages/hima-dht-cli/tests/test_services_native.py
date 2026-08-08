@@ -5,10 +5,6 @@ Test cases:
   without an owned pid raises CommandError instead of skipping launch.
 - test_ensure_service_owned_healthy_short_circuits: a live owned
   group-leader pid with a healthy endpoint returns without launching.
-- test_ensure_leader_model_queries_ollama_port: the presence check runs
-  against the Ollama root built from the given port.
-- test_ensure_leader_model_logs_pull_exit: a pull emits an exit record
-  carrying the model and the exit code.
 - test_wait_healthy_logs_service_and_attempts: reaching health emits one
   record carrying the service name and the attempt count.
 - test_wait_healthy_dead_process_reports_log_tail: a process that exits
@@ -23,15 +19,12 @@ Test cases:
   removed and reported as not owned.
 - test_owned_pid_access_denied_clears_record: a pid reused by another
   user's process is treated as stale, not as an error.
-- test_ollama_spec_binds_port_via_env: the ollama spec carries OLLAMA_HOST
-  for the requested port and probes the same port.
 """
 
 import logging
 import signal
 import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 
 import psutil
 import pytest
@@ -75,40 +68,6 @@ def test_ensure_service_owned_healthy_short_circuits(
     finally:
         child.kill()
         child.wait()
-
-
-def test_ensure_leader_model_queries_ollama_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    queried: dict[str, tuple[str, str]] = {}
-
-    def fake_present(root: str, model: str) -> bool:
-        queried["endpoint"] = (root, model)
-        return True
-
-    monkeypatch.setattr(_native, "leader_model_present", fake_present)
-
-    _native.ensure_leader_model("qwen3:8b", skip_pull=True, ollama_port=12345)
-
-    assert queried["endpoint"] == ("http://localhost:12345", "qwen3:8b")
-
-
-def test_ensure_leader_model_logs_pull_exit(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    monkeypatch.setattr(_native, "leader_model_present", lambda root, model: False)
-    monkeypatch.setattr(
-        "hima_dht_cli.services._native.subprocess.run",
-        lambda argv, env: SimpleNamespace(returncode=0),
-    )
-
-    with caplog.at_level(logging.INFO, logger="hima_dht_cli.services._native"):
-        _native.ensure_leader_model("qwen3:8b", skip_pull=False, ollama_port=11434)
-
-    messages = [record.getMessage() for record in caplog.records]
-    assert any(
-        message.startswith("leader model pull exited: model=qwen3:8b exit_code=0")
-        for message in messages
-    )
 
 
 def test_wait_healthy_logs_service_and_attempts(
@@ -203,10 +162,3 @@ def test_owned_pid_access_denied_clears_record(
 
     assert _native.owned_pid(spec) is None
     assert not spec.pid_file.exists()
-
-
-def test_ollama_spec_binds_port_via_env() -> None:
-    spec = _native.ollama_spec(12345)
-
-    assert spec.env == {"OLLAMA_HOST": "127.0.0.1:12345"}
-    assert spec.health_url == "http://localhost:12345/api/tags"

@@ -11,7 +11,9 @@ QUERY_TIMEOUT_S = 3
 
 # Health probe path per managed service, fixed by each server's API.
 # Service specs and status checks build their probe URLs from this table.
-HEALTH_PATHS = {"ollama": "/api/tags", "advisor": "/health", "webui": "/api/games"}
+# The leader engine is not a managed service: it is checked through its
+# OpenAI-compatible model list instead (`leader_models`).
+HEALTH_PATHS = {"advisor": "/health", "webui": "/api/games"}
 
 
 def healthy(url: str) -> bool:
@@ -29,22 +31,6 @@ def advisor_health_url(host: str, port: int) -> str:
 
 def advisor_healthy(host: str, port: int) -> bool:
     return healthy(advisor_health_url(host, port))
-
-
-def ollama_url(port: int) -> str:
-    return f"http://localhost:{port}"
-
-
-def leader_model_present(root: str, model: str) -> bool:
-    # A foreign server on the port may answer 200 with an arbitrary body;
-    # a body that does not parse as an Ollama tag list means absent.
-    try:
-        response = requests.get(f"{root}/api/tags", timeout=QUERY_TIMEOUT_S)
-        response.raise_for_status()
-        names = [entry["name"] for entry in response.json().get("models", [])]
-    except (requests.RequestException, AttributeError, KeyError, TypeError):
-        return False
-    return model_served(model, names)
 
 
 def model_served(model: str, served: list[str]) -> bool:
