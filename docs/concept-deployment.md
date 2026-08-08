@@ -7,11 +7,10 @@ dependency: the game headless in a container, the leader and advisor models serv
 locally. The parts have unequal portability — Python dependencies lock cleanly and
 model services containerize cleanly, while retail StarCraft II and Apple-silicon
 inference resist containers — so the fully containerized stack is the reference
-placement and the host-native game is a development placement.
+placement and the host-placed game is a development placement.
 
 **System Role** — Deployment layer: packages every part as a container image built
-from the locked environment, and names the host-native development placements that
-remain outside it.
+from the locked environment, and names the host placements that remain outside it.
 
 **Data Flow**
 - **Inputs:** the locked environment (one lock file for all platforms), advisor model
@@ -35,25 +34,25 @@ remain outside it.
 
 ```
 Any device (reference)                macOS device (development)
-  game container (headless 4.10)        game process (native, retail 5.0.16)
+  game container (headless 4.10)        game process (host, retail 5.0.16)
       |            \                        |            \
       v             v                       v             v
   advisor service   leader service      advisor service   leader service
-  (container)       (container)         (container/native)(container/native)
+  (container)       (container)         (container/host)  (container/host)
 ```
 
 **Core Concepts**
 
 - **Name:** Locked environment
   - **Definition:** The single dependency lock resolving every platform; every image
-    and every native install derives from it.
+    and every host install derives from it.
   - **Scope:** Python dependencies only. Excludes model weights and the game program.
   - **Relationships:** Source of every container image; source of the host install.
 
 - **Name:** Advisor service
   - **Definition:** The three fine-tuned advisor models behind one inference endpoint.
   - **Scope:** Weights download on first start into a persistent volume; CPU inference
-    in containers, Apple-silicon inference only native.
+    in containers, Apple-silicon inference only on the host.
   - **Relationships:** Built from the locked environment; called by the game process.
 
 - **Name:** Leader service
@@ -66,8 +65,8 @@ Any device (reference)                macOS device (development)
 
 - **Name:** Game runtime placement
   - **Definition:** Where the game process and StarCraft II run: containerized with
-    the headless client on any device (the reference placement), or native on macOS
-    with the retail client (a development placement).
+    the headless client on any device (the reference placement), or on the host on
+    macOS with the retail client (a development placement).
   - **Scope:** The two clients differ in game version and balance; results from one
     placement are not comparable with results from the other. The headless client is
     x86-only and requires the user's license acceptance; the ladder map is not
@@ -75,9 +74,21 @@ Any device (reference)                macOS device (development)
   - **Relationships:** Either placement reaches the advisor and leader services over
     the service network; both produce archives the observation subsystem reads.
 
+- **Name:** Deployment axis
+  - **Definition:** One independent choice a deployment makes: where the services
+    run, whether an observation server exists, where the game runs, and which
+    surface a human watches through.
+  - **Scope:** No value of one axis constrains another; a containerized game
+    reaches host services as readily as containerized ones, and any surface
+    watches either game placement.
+  - **Relationships:** The service and game runtime placements are two axes over
+    the same host/container choice; the observation surface reads the archives
+    both game placements write.
+
 - **Name:** Service network
   - **Definition:** How the parts address each other: containers by service name on a
-    shared network, the host-native game process by published localhost ports.
+    shared network, a host-placed part by published localhost ports and the host
+    gateway name.
   - **Scope:** Excludes any cross-device networking.
   - **Relationships:** Connects the game runtime to the advisor and leader services
     and the observation server to browsers.
@@ -86,7 +97,7 @@ Any device (reference)                macOS device (development)
 
 **Data Contracts**
 - **With the game process:** the advisor and leader endpoints keep the same addresses
-  whether their services run native or containerized.
+  whether their services run on the host or in containers.
 - **With the observation subsystem:** archives land on the host filesystem; the
   observation server reads them regardless of where the game ran.
 
@@ -102,7 +113,7 @@ Any device (reference)                macOS device (development)
 - **Typical:** Any device runs the full containerized stack — headless game, advisor,
   and leader — and one compose invocation reproduces an experiment; runs compare with
   other containerized runs.
-- **Boundary:** The macOS device runs the game native for Apple-silicon inference and
+- **Boundary:** The macOS device runs the game on the host for Apple-silicon inference and
   retail-version fidelity; those runs are version-sensitive and compare only with
   other retail runs.
 - **Interaction:** A new device clones the repository, restores the locked

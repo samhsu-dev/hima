@@ -28,7 +28,7 @@ compose services: `design-deployment.md`.
 ## Class / Type Specifications
 
 ### ServiceSpec (`services._host`)
-- **Responsibility**: Describe one natively spawned background service.
+- **Responsibility**: Describe one host-placed background service.
 - **Fields**: `name: str`, `argv: list[str]`, `health_url: str`,
   `pid_file: Path`, `log_file: Path`, `process_keyword: str`.
 - **Methods**: none (data holder). `process_keyword` guards `down`: a stored PID is
