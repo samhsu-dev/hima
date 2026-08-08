@@ -1,22 +1,26 @@
-# StarCraft II (retail 5.0.16) and the game loop stay on the host: the macOS
-# client cannot run in a Linux container, and macOS Docker has no Metal/MPS
-# passthrough. The host `hima run` reaches these services with its localhost
-# defaults. The leader is an endpoint contract, never a managed service:
-# `hima up` only verifies HIMA_LEADER_BASE_URL and never starts an engine on
-# any backend; the ollama/leader-baked services below are opt-in profile
-# alternatives selected by pointing HIMA_LEADER_BASE_URL at them.
+# Compose side of the three deployment axes (docs/design-deployment.md):
+# `hima up --services container` places the managed services here, `hima run
+# --game container` runs one game as the `game` job, and the observation
+# surface (`hima run --ui`) is independent of both. A host `hima run --game
+# host` reaches the published ports with its localhost defaults. The leader
+# is an endpoint contract, never a managed service: `hima up` only verifies
+# HIMA_LEADER_BASE_URL and never starts an engine at either placement; the
+# ollama/leader-baked services below are opt-in profile alternatives
+# selected by pointing HIMA_LEADER_BASE_URL at them.
 #
-# Default set — `hima up --backend docker` runs advisor + webui and records
-# the manifest:
-#   docker compose up -d --wait advisor webui
+# Default set — `hima up --services container` runs the advisor alone and
+# records the manifest; `--webui` adds the observation server:
+#   docker compose up -d --wait advisor
+#   docker compose --profile webui up -d --wait advisor webui
 #
 # Opt-in profiles:
+#   webui  — observation server, added by `hima up --webui`
 #   leader — stock Ollama for Linux/NVIDIA hosts; pull the model once into
 #            its volume: docker compose exec ollama ollama pull qwen3:8b
 #   baked  — qwen3:8b inside the image, no per-device pull (offline-capable):
 #            docker compose --profile baked build leader-baked
 #            docker compose --profile baked up -d advisor leader-baked
-#   game   — containerized SC2 4.10 game job (`hima run --headless`)
+#   game   — containerized SC2 4.10 game job (`hima run --game container`)
 
 # Pin the compose project name so every container, network, and volume
 # groups under "hima" regardless of the checkout directory name or -p flag
@@ -53,6 +57,9 @@ services:
       start_period: 600s
 
   webui:
+    # Watching a game is opt-in: a run needs an advisor, never a place to
+    # watch it from. `hima up --webui` activates this profile.
+    profiles: ["webui"]
     build:
       context: .
       dockerfile: docker/hima.Dockerfile
@@ -118,9 +125,15 @@ services:
     image: hima-game
     command: hima run
     environment:
-      # The advisor is a compose service; the localhost default would point
-      # at the game container itself.
+      # Default for a hand-run compose job, where the advisor is a compose
+      # service; the localhost default would point at the game container
+      # itself. `hima run` overrides it per invocation with the address the
+      # manifest's advisor actually answers on.
       HIMA_ADVISOR_HOST: advisor
+      # Inside the container the game is already local. Without this pin the
+      # shipped default (`container`) would make the in-container `hima run`
+      # dispatch back into compose.
+      HIMA_GAME: host
       # Leader default: the host's native Ollama through the container-to-
       # host name. A .env value (remote endpoint, or http://ollama:11434/v1
       # for the compose service) overrides via interpolation.
@@ -131,9 +144,9 @@ services:
     volumes:
       - ./runs:/app/runs
       - ./tmp:/app/tmp
-    depends_on:
-      advisor:
-        condition: service_healthy
+    # No depends_on: hima is the orchestrator and prechecks the advisor at
+    # its recorded endpoint, which may be a host process rather than the
+    # compose service.
 
 volumes:
   hf-cache:
